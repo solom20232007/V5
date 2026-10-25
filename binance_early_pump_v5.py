@@ -1,5 +1,5 @@
 # ============================================================
-# BINANCE EARLY-PUMP SCANNER V4.4.1
+# BINANCE EARLY-PUMP SCANNER V5.0 EXPERIMENTAL
 # ============================================================
 # القاعدة: scanner_v4 (أدق في الـscore والـgates) + إصلاح أخطاء النسخة المنشورة.
 # V4.4.1 (إصلاح عطل كامل):
@@ -26,7 +26,7 @@ import requests, time, math, csv, os, json, sys, logging, re, html
 import pandas as pd
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from entry_quality import confirm_one_minute_entry
+from entry_quality_v5 import confirm_one_minute_entry
 
 # ---------- Logging ----------
 logging.basicConfig(
@@ -49,7 +49,7 @@ STATE_FILE = "scanner_state.json"
 INTERVAL = "5m"
 KLINES_LIMIT = 180
 MAX_WORKERS = 16
-MAX_PROCESS_PER_CYCLE = 30
+MAX_PROCESS_PER_CYCLE = int(os.getenv('MAX_PROCESS_PER_CYCLE', '100'))
 
 # ---------- Scan ----------
 SCAN_EVERY_SECONDS = 300
@@ -176,7 +176,19 @@ CROSS_CONFIRM_DISAGREE_PCT = -1.0
 SUPPRESS_ON_DIVERGENCE = False
 CROSS_CACHE_TTL_SECONDS = 300
 
-SCAN_DIAGNOSTICS_FILE = "early_scan_diagnostics.csv"
+# ---------- V5 Smart Money layer ----------
+SMART_MONEY_ENABLED = os.getenv("SMART_MONEY_ENABLED", "1") == "1"
+SMART_MONEY_TOP_N = int(os.getenv("SMART_MONEY_TOP_N", "30"))
+SMART_MONEY_WEIGHT = float(os.getenv("SMART_MONEY_WEIGHT", "0.30"))
+FAST_EXPLOSIVE_ENABLED = os.getenv("FAST_EXPLOSIVE_ENABLED", "1") == "1"
+FAST_EXPLOSIVE_MIN_VOLUME_15M = 7.0
+FAST_EXPLOSIVE_MIN_BUY_PRESSURE = 0.62
+FAST_EXPLOSIVE_MIN_ACCELERATION = 2.0
+ORDERBOOK_DEPTH_LIMIT = 20
+SMART_DATA_CACHE_TTL = 240
+smart_data_cache = {}
+
+SCAN_DIAGNOSTICS_FILE = "early_scan_diagnostics_v5.csv"
 
 # ---------- OKX Lead Watcher ----------
 OKX_LEAD_MIN_1H_CHG = 2.5
@@ -199,12 +211,12 @@ COMPRESSED_COOLDOWN_HOURS = 4
 
 # ---------- Tracking ----------
 TRACK_MINUTES = [5, 15, 30, 60, 240, 1440]
-TRACK_FILE = "early_pump_signal_results.csv"
+TRACK_FILE = "early_pump_signal_results_v5.csv"
 TRADE_TIMEOUT_MIN = 240      # لو لا TP1 ولا SL خلال 4 ساعات -> TIMEOUT (خروج بالسعر وقتها)
 NOTIFY_OUTCOMES = True       # تيليجرام لما إشارة تحقق TP1 أو SL
 COMPRESSED_TELEGRAM = False  # إنذار Compressed: تسجيل فقط (زي نسخة v3 الأصلية)
 TRACK_RETENTION_DAYS = 365   # سجل النتائج = بيانات التعلم الذاتي، ماينفعش يتمسح بعد 4 أيام
-EARLY_WATCH_LOG_FILE = "early_watch_log.csv"
+EARLY_WATCH_LOG_FILE = "early_watch_log_v5.csv"
 EARLY_WATCH_COOLDOWN_HOURS = 2
 
 # ---------- CSV retention ----------
@@ -257,7 +269,7 @@ def load_auto_thresholds():
         log.warning(f"auto thresholds load failed: {e}")
 
 
-PROGRAM_TAG = "🤖 [V4]"
+PROGRAM_TAG = "🤖 [V5]"
 if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
     log.warning("TELEGRAM_BOT_TOKEN أو TELEGRAM_CHAT_ID غير موجودين — سيعمل بدون إرسال.")
 
@@ -793,8 +805,9 @@ def analyze(symbol, ticker):
         log.debug(f"analyze klines failed for {symbol}: {e}")
         return {"symbol": symbol, "_rejected": "KLINES_FETCH_ERROR"}
 
-    if len(klines) < 80:
+    if len(klines) < int(os.getenv('MIN_KLINES', '25')):
         return {"symbol": symbol, "_rejected": "INSUFFICIENT_KLINES"}
+    new_listing_mode = len(klines) < 80
 
     k = klines[:-1]
 
@@ -831,13 +844,15 @@ def analyze(symbol, ticker):
 
     # Volume
     current_15m = sum(quote_volumes[-3:])
-    historical_15m = [sum(quote_volumes[i - 3:i]) for i in range(23, len(quote_volumes) - 3, 3)]
-    baseline_15m = mean(historical_15m)
+    historical_15m = [sum(quote_volumes[i - 3:i])
+                      for i in range(3, len(quote_volumes) - 3 + 1, 3)]
+    baseline_15m = sorted(historical_15m)[len(historical_15m)//2] if historical_15m else 0
     volume_ratio_15m = current_15m / baseline_15m if baseline_15m else 0
 
     current_1h = sum(quote_volumes[-12:])
-    historical_1h = [sum(quote_volumes[i - 12:i]) for i in range(48, len(quote_volumes) - 12, 12)]
-    baseline_1h = mean(historical_1h)
+    historical_1h = [sum(quote_volumes[i - 12:i])
+                     for i in range(12, len(quote_volumes) - 12 + 1, 12)]
+    baseline_1h = sorted(historical_1h)[len(historical_1h)//2] if historical_1h else 0
     volume_ratio_1h = current_1h / baseline_1h if baseline_1h else 0
 
     previous_15m = sum(quote_volumes[-6:-3])
@@ -1097,6 +1112,7 @@ def analyze(symbol, ticker):
 
     return {
         "symbol": symbol,
+        "new_listing_mode": bool(new_listing_mode),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "price": price,
         "5m": gain_5m, "15m": gain_15m, "1h": gain_1h, "4h": gain_4h, "24h": gain_24h,
@@ -1130,6 +1146,98 @@ def analyze(symbol, ticker):
         "funding_rate": funding_rate,
         "risk": risk,
     }
+
+
+# ============================================================
+# V5 Smart Money data
+# ============================================================
+def _cached_smart_data(symbol):
+    cached = smart_data_cache.get(symbol)
+    if cached and time.time() - cached.get("ts", 0) < SMART_DATA_CACHE_TTL:
+        return cached
+    data = {"ts": time.time(), "orderbook_imbalance": None,
+            "oi_change_pct": None, "smart_money_score": 50.0}
+    try:
+        depth = get_json("/api/v3/depth", {"symbol": symbol, "limit": ORDERBOOK_DEPTH_LIMIT}, retries=1)
+        bids = sum(float(row[0]) * float(row[1]) for row in depth.get("bids", [])[:ORDERBOOK_DEPTH_LIMIT])
+        asks = sum(float(row[0]) * float(row[1]) for row in depth.get("asks", [])[:ORDERBOOK_DEPTH_LIMIT])
+        if bids + asks > 0:
+            data["orderbook_imbalance"] = (bids - asks) / (bids + asks)
+    except Exception as exc:
+        log.debug("V5 depth unavailable %s: %s", symbol, exc)
+    try:
+        # Binance Futures OI history is public; some spot symbols have no futures contract.
+        response = session.get(FUTURES_BASE_URL + "/futures/data/openInterestHist",
+                                   params={"symbol": symbol, "period": "15m", "limit": 2}, timeout=8)
+        response.raise_for_status()
+        rows = response.json()
+        if isinstance(rows, list) and len(rows) >= 2:
+            old = float(rows[-2].get("sumOpenInterestValue", 0) or 0)
+            new = float(rows[-1].get("sumOpenInterestValue", 0) or 0)
+            if old > 0:
+                data["oi_change_pct"] = (new / old - 1.0) * 100.0
+    except Exception as exc:
+        log.debug("V5 open interest unavailable %s: %s", symbol, exc)
+    smart = []
+    # Bounded components avoid one extreme observation dominating the ranking.
+    bp = float(current_smart_context.get(symbol, {}).get("buy_pressure", 0.5))
+    vol = float(current_smart_context.get(symbol, {}).get("volume_15m", 1.0))
+    accel = float(current_smart_context.get(symbol, {}).get("acceleration", 1.0))
+    smart.append(max(0.0, min(100.0, (bp - 0.45) / 0.25 * 100.0)))
+    smart.append(max(0.0, min(100.0, vol / 8.0 * 100.0)))
+    smart.append(max(0.0, min(100.0, accel / 3.0 * 100.0)))
+    if data["orderbook_imbalance"] is not None:
+        smart.append(max(0.0, min(100.0, (data["orderbook_imbalance"] + 0.2) / 0.6 * 100.0)))
+    if data["oi_change_pct"] is not None:
+        smart.append(max(0.0, min(100.0, (data["oi_change_pct"] + 1.0) / 4.0 * 100.0)))
+    data["smart_money_score"] = round(sum(smart) / len(smart), 2) if smart else 50.0
+    smart_data_cache[symbol] = data
+    return data
+
+
+current_smart_context = {}
+
+def enrich_smart_money(x):
+    """Attach V5 market microstructure fields; missing futures/depth data stays neutral."""
+    if not SMART_MONEY_ENABLED:
+        x.update({"orderbook_imbalance": None, "oi_change_pct": None, "smart_money_score": 50.0})
+        x["final_rank"] = float(x.get("score", 0))
+        return x
+    sym = x.get("symbol")
+    current_smart_context[sym] = {
+        "buy_pressure": x.get("buy_pressure", 0.5),
+        "volume_15m": x.get("volume_15m", 1.0),
+        "acceleration": x.get("acceleration", 1.0),
+    }
+    data = _cached_smart_data(sym)
+    x.update({k: data.get(k) for k in ("orderbook_imbalance", "oi_change_pct")})
+    components = [
+        max(0.0, min(100.0, (float(x.get("buy_pressure", 0.5)) - 0.45) / 0.25 * 100.0)),
+        max(0.0, min(100.0, float(x.get("volume_15m", 1.0)) / 8.0 * 100.0)),
+        max(0.0, min(100.0, float(x.get("acceleration", 1.0)) / 3.0 * 100.0)),
+    ]
+    if x["orderbook_imbalance"] is not None:
+        components.append(max(0.0, min(100.0, (float(x["orderbook_imbalance"]) + 0.2) / 0.6 * 100.0)))
+    if x["oi_change_pct"] is not None:
+        components.append(max(0.0, min(100.0, (float(x["oi_change_pct"]) + 1.0) / 4.0 * 100.0)))
+    x["smart_money_score"] = round(sum(components) / len(components), 2)
+    base = max(0.0, min(100.0, float(x.get("score", 0))))
+    smart = float(x.get("smart_money_score", 50))
+    x["final_rank"] = round((1.0 - SMART_MONEY_WEIGHT) * base + SMART_MONEY_WEIGHT * smart, 2)
+    return x
+
+
+def fast_explosive_eligible(x):
+    return bool(
+        FAST_EXPLOSIVE_ENABLED and not x.get("is_wash")
+        and not x.get("new_listing_mode", False)
+        and x.get("volume_15m", 0) >= FAST_EXPLOSIVE_MIN_VOLUME_15M
+        and x.get("buy_pressure", 0) >= FAST_EXPLOSIVE_MIN_BUY_PRESSURE
+        and x.get("acceleration", 0) >= FAST_EXPLOSIVE_MIN_ACCELERATION
+        and x.get("score", 0) >= EXCEPTIONAL_SCORE
+        and x.get("smart_money_score", 0) >= 65
+        and (x.get("orderbook_imbalance") is None or x.get("orderbook_imbalance", 0) >= -0.05)
+    )
 
 
 # ============================================================
@@ -2148,10 +2256,11 @@ def maybe_final_signal(x, now):
     if x["score"] > c["best"]["score"]:
         c["best"] = x
 
-    if c["count"] < CONFIRMATIONS_REQUIRED:
+    fast_lane = fast_explosive_eligible(x)
+    if c["count"] < CONFIRMATIONS_REQUIRED and not fast_lane:
         return False
 
-    if not final_candidate_eligible(x):
+    if not final_candidate_eligible(x) and not fast_lane:
         return False
 
     first = c["first"]
@@ -2162,7 +2271,7 @@ def maybe_final_signal(x, now):
         and x["volume_1h"] >= first["volume_1h"] * 0.70
     )
 
-    if not second_confirmed:
+    if not second_confirmed and not fast_lane:
         return False
 
     # نستخدم مسح الآن (مش best القديم) + سعر لحظي، عشان الدخول/SL/TP يطابقوا اللي يقدر المستخدم ينفذه
@@ -2362,6 +2471,15 @@ def run_cycle(symbols):
         log.info(f"No watch candidates >= {WATCH_SCORE}")
     else:
         log.info(f"Watch candidates: {len(results)}")
+        # Fetch expensive microstructure data only for the strongest candidates.
+        for x in results[:min(MAX_PROCESS_PER_CYCLE, SMART_MONEY_TOP_N)]:
+            try:
+                enrich_smart_money(x)
+            except Exception as exc:
+                log.debug("V5 smart money enrichment failed for %s: %s", x.get("symbol"), exc)
+                x.setdefault("smart_money_score", 50.0)
+                x.setdefault("final_rank", float(x.get("score", 0)))
+        results.sort(key=lambda x: (x.get("final_rank", x["score"]), x["volume_1h"]), reverse=True)
         for x in results[:MAX_PROCESS_PER_CYCLE]:
             log.info(
                 f"{x['symbol']:12} Score={x['score']:3} "
@@ -2413,7 +2531,7 @@ except Exception as e:
     sys.exit(1)
 
 log.info(f"تم تحميل {len(symbols)} زوج USDT.")
-log.info("Scanner V4.3 started" + (" (single run)." if ONCE else "."))
+log.info("Scanner V5.0 experimental started" + (" (single run)." if ONCE else "."))
 
 if ONCE:
     try:
