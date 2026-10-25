@@ -25,8 +25,8 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-TRACK_FILE = "early_pump_signal_results.csv"
-SCANNER_FILE = os.getenv("SCANNER_FILE", "binance_early_pump_v4.py")
+TRACK_FILE = "early_pump_signal_results_v5.csv"
+SCANNER_FILE = os.getenv("SCANNER_FILE", "binance_early_pump_v5.py")
 STATE_DIR = "state"
 OUT_FILE = os.path.join(STATE_DIR, "auto_thresholds.json")
 PERF_FILE = os.path.join(STATE_DIR, "self_learn_performance.json")
@@ -255,7 +255,7 @@ def main():
     if "warning" in report:
         print("[self_learn] ⚠️", report["warning"])
 
-    lines = [f"🧠 تقييم التعلّم الذاتي ({total} إشارة محسومة)",
+    lines = [f"🤖 [V5] 🧠 تقييم التعلّم الذاتي ({total} إشارة محسومة)",
              f"فوز TP1: {overall['win_rate']:.0%} | ضرب SL: {overall['sl_rate']:.0%}",
              f"متوسط الخروج: {overall['avg_exit_pct']:+.2f}% | Expectancy: {overall['expectancy_R']:+.2f}R"]
     for lane, d in report["by_lane"].items():
