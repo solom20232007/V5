@@ -183,6 +183,7 @@ def step_bayes(args):
 
 def step_portfolio(args):
     from v5ext import portfolio as P
+    os.makedirs(C.REPORTS_DIR, exist_ok=True)
     cfg = P.PortfolioConfig(initial_capital=args.capital, risk_per_trade=args.risk,
                             max_position_pct=args.max_position, max_positions=args.max_positions)
     out = {}
