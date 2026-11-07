@@ -1,0 +1,174 @@
+{
+  "run_at": "2026-11-07T15:05:40.423481+00:00",
+  "synthetic": false,
+  "symbols": 35,
+  "days": 30,
+  "exit_mode": "MANAGED",
+  "fee_pct_per_side": 0.1,
+  "slippage_pct_per_side": 0.05,
+  "scan_records": 24514,
+  "labeled_rows": 24415,
+  "label_base_rate": 0.0861,
+  "rules": {
+    "trades": 22,
+    "win_rate": 0.5909,
+    "expectancy_r": 0.1398,
+    "avg_net_pct": 0.3471,
+    "profit_factor": 1.394,
+    "total_r": 3.076,
+    "max_dd_r": 3.73,
+    "max_losing_streak": 3,
+    "avg_bars_held": 86.0,
+    "by_lane": {
+      "EXPLOSIVE": {
+        "trades": 3,
+        "win_rate": 0.667,
+        "expectancy_r": 0.623
+      },
+      "PERSISTENT": {
+        "trades": 7,
+        "win_rate": 0.429,
+        "expectancy_r": -0.408
+      },
+      "STRICT": {
+        "trades": 12,
+        "win_rate": 0.667,
+        "expectancy_r": 0.339
+      }
+    },
+    "by_horizon": {
+      "INTRADAY": {
+        "trades": 13,
+        "win_rate": 0.615,
+        "avg_net_pct": 0.246
+      },
+      "SCALPING": {
+        "trades": 7,
+        "win_rate": 0.571,
+        "avg_net_pct": 0.99
+      },
+      "SWING": {
+        "trades": 2,
+        "win_rate": 0.5,
+        "avg_net_pct": -1.244
+      }
+    },
+    "by_outcome": {
+      "TIMEOUT": 12,
+      "SL": 5,
+      "BE": 3,
+      "TP3": 2
+    }
+  },
+  "limitations": [
+    "لا يوجد order book / whales تاريخي → الـ backtest يختبر قواعد الـ score + ML + F&G فقط",
+    "فلتر شمعة 1m وتأكيد Bybit/OKX غير مطبّقين في الـ backtest",
+    "SL و TP في نفس شمعة 5m → يُحتسب SL (افتراض متحفّظ)",
+    "تنبيه الفشل المبكر (بيع فورًا) مش محسوب كخروج — الـ backtest بيفترض إنك ملتزم بالوقف",
+    "اختيار العملات حسب حجم اليوم → انحياز بقاء (survivorship bias)"
+  ],
+  "oos_comparison": {
+    "period_from": "2026-10-19T22:19:59.999000+00:00",
+    "ml_threshold": 0.0265,
+    "rules_only": {
+      "trades": 9,
+      "win_rate": 0.4444,
+      "expectancy_r": -0.3515,
+      "avg_net_pct": -1.3073,
+      "profit_factor": 0.28,
+      "total_r": -3.164,
+      "max_dd_r": 3.482,
+      "max_losing_streak": 2,
+      "avg_bars_held": 74.9,
+      "by_lane": {
+        "EXPLOSIVE": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "expectancy_r": 0.111
+        },
+        "PERSISTENT": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "expectancy_r": -0.353
+        },
+        "STRICT": {
+          "trades": 5,
+          "win_rate": 0.4,
+          "expectancy_r": -0.536
+        }
+      },
+      "by_horizon": {
+        "INTRADAY": {
+          "trades": 5,
+          "win_rate": 0.6,
+          "avg_net_pct": -0.844
+        },
+        "SCALPING": {
+          "trades": 3,
+          "win_rate": 0.333,
+          "avg_net_pct": -0.748
+        },
+        "SWING": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_net_pct": -5.3
+        }
+      },
+      "by_outcome": {
+        "TIMEOUT": 5,
+        "SL": 3,
+        "BE": 1
+      }
+    },
+    "rules_plus_ml": {
+      "trades": 8,
+      "win_rate": 0.375,
+      "expectancy_r": -0.4352,
+      "avg_net_pct": -1.6099,
+      "profit_factor": 0.207,
+      "total_r": -3.482,
+      "max_dd_r": 3.482,
+      "max_losing_streak": 2,
+      "avg_bars_held": 72.2,
+      "by_lane": {
+        "EXPLOSIVE": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "expectancy_r": 0.111
+        },
+        "PERSISTENT": {
+          "trades": 2,
+          "win_rate": 0.5,
+          "expectancy_r": -0.353
+        },
+        "STRICT": {
+          "trades": 4,
+          "win_rate": 0.25,
+          "expectancy_r": -0.75
+        }
+      },
+      "by_horizon": {
+        "INTRADAY": {
+          "trades": 4,
+          "win_rate": 0.5,
+          "avg_net_pct": -1.333
+        },
+        "SCALPING": {
+          "trades": 3,
+          "win_rate": 0.333,
+          "avg_net_pct": -0.748
+        },
+        "SWING": {
+          "trades": 1,
+          "win_rate": 0.0,
+          "avg_net_pct": -5.3
+        }
+      },
+      "by_outcome": {
+        "TIMEOUT": 4,
+        "SL": 3,
+        "BE": 1
+      }
+    }
+  }
+}

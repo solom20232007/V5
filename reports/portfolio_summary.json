@@ -1,0 +1,24 @@
+{
+  "config": {
+    "initial_capital": 1000.0,
+    "risk_per_trade": 0.01,
+    "max_position_pct": 0.25,
+    "max_positions": 5,
+    "compounding": true
+  },
+  "signals": 22,
+  "taken": 20,
+  "skipped_max_positions": 2,
+  "final_equity": 1002.63,
+  "return_pct": 0.26,
+  "max_drawdown_pct": 3.14,
+  "win_rate": 0.55,
+  "profit_factor": 1.041,
+  "avg_pnl": 0.132,
+  "best_trade": 12.89,
+  "worst_trade": -10.84,
+  "monthly_pnl": {
+    "2026-10": 11.87,
+    "2026-11": -9.24
+  }
+}
