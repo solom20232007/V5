@@ -1,4 +1,4 @@
-name: Binance Early-Pump Scanner V5 Experimental
+name: Binance Early-Pump Scanner V5.1 Experimental
 
 on:
   # cron-job.org بيستدعي الـ workflow ده كل دقيقتين عن طريق GitHub API
@@ -31,7 +31,9 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-ml.txt || echo "xgboost غير متاح — سيُستخدم البديل"
 
       - name: Run one scan cycle
         env:
@@ -52,6 +54,17 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python self_learn_v5.py || true
 
+      - name: V5.1 refresh (Bayesian stats + live portfolio + dashboard)
+        # تقريبًا كل 30 دقيقة بس (عشان ما نعملش commit لصفحة الـ dashboard كل دقيقتين)
+        if: always()
+        run: |
+          M=$(date -u +%-M)
+          if [ $((M % 30)) -lt 3 ] || [ ! -f docs/index.html ]; then
+            python research.py bayes || true
+            python research.py portfolio || true
+            python research.py dashboard || true
+          fi
+
       - name: Save state and results back to the repo
         if: always()
         run: |
@@ -59,7 +72,7 @@ jobs:
           git config user.email "scanner-bot@users.noreply.github.com"
           git add scanner_state.json early_pump_signal_results_v5.csv \
                   early_watch_log_v5.csv early_scan_diagnostics_v5.csv \
-                  shariah_compliant_bases.json state 2>/dev/null || true
+                  shariah_compliant_bases.json state reports docs 2>/dev/null || true
           # الأول commit وبعدين rebase: (pull --rebase مع تعديلات غير مُحتفَظ بيها كان بيفشل بصمت)
           git diff --cached --quiet || git commit -m "Update scanner state [skip ci]"
           git pull --rebase origin ${{ github.ref_name }} || true

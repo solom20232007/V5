@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+scanner.log
+data/
+*.tmp

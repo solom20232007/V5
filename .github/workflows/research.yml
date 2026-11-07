@@ -1,0 +1,84 @@
+name: V5.1 Research (Backtest + XGBoost + Optimizer)
+
+# تشغيل أسبوعي (الأحد 02:17 UTC) + يدوي من تبويب Actions
+on:
+  schedule:
+    - cron: "17 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "عدد الأيام التاريخية"
+        default: "30"
+      top:
+        description: "عدد العملات"
+        default: "60"
+      trials:
+        description: "محاولات الـ optimizer"
+        default: "250"
+      apply:
+        description: "تطبيق العتبات المحسّنة لو نجحت في الـ test؟ (yes/no)"
+        default: "no"
+
+concurrency:
+  group: research-v5
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: |
+          pip install -r requirements.txt
+          pip install -r requirements-ml.txt || echo "xgboost غير متاح — سيُستخدم البديل"
+
+      - name: Cache historical klines
+        uses: actions/cache@v4
+        with:
+          path: data/klines
+          key: klines-${{ github.run_id }}
+          restore-keys: klines-
+
+      - name: Run full research pipeline
+        env:
+          SHARIAH_FILTER: "1"
+        run: |
+          APPLY=""
+          if [ "${{ github.event.inputs.apply }}" = "yes" ]; then APPLY="--apply"; fi
+          python research.py all \
+            --days "${{ github.event.inputs.days || '30' }}" \
+            --top "${{ github.event.inputs.top || '60' }}" \
+            --trials "${{ github.event.inputs.trials || '250' }}" $APPLY
+
+      - name: Commit models and reports
+        run: |
+          # الماسح بيعمل commits كل دقيقتين → ناخد آخر نسخة ونحط مخرجاتنا فوقها
+          mkdir -p /tmp/out
+          cp -r models reports docs /tmp/out/ 2>/dev/null || true
+          mkdir -p /tmp/out/state
+          cp state/bayes_stats.json state/fear_greed_cache.json /tmp/out/state/ 2>/dev/null || true
+          cp state/optimized_thresholds.json /tmp/out/state/ 2>/dev/null || true
+          git config user.name "research-bot"
+          git config user.email "research-bot@users.noreply.github.com"
+          for i in 1 2 3 4 5; do
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            cp -r /tmp/out/* .
+            git add models reports docs state
+            git diff --cached --quiet && break
+            git commit -m "Research: backtest + model + optimizer [skip ci]"
+            git push && break
+            sleep $((i * 7))
+          done

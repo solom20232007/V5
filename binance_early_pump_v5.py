@@ -28,6 +28,15 @@ from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from entry_quality_v5 import confirm_one_minute_entry
 
+# V5.1: OBI + OI + Whales + Fear&Greed + XGBoost + Bayesian (اختياري — لو فشل الاستيراد الماسح يكمّل زي V5)
+try:
+    from v5ext import live_bridge as v5x
+    from v5ext.optimizer import OPTIMIZABLE as V5X_OPTIMIZABLE
+except Exception as _v5x_err:  # noqa: BLE001
+    v5x = None
+    V5X_OPTIMIZABLE = set()
+    print(f"[V5.1] extensions disabled: {_v5x_err}")
+
 # ---------- Logging ----------
 logging.basicConfig(
     level=logging.INFO,
@@ -153,6 +162,7 @@ RISK_MAX_SL_PCT = 12.0
 RISK_ATR_MULT_SL = 1.5
 RISK_RR_TP1 = 1.5
 RISK_RR_TP2 = 3.0
+RISK_RR_TP3 = 4.5      # الهدف الثالث (للعرض + تسجيل MFE؛ النجاح في التعلّم = TP1)
 RISK_HIGH_ATR_THRESHOLD = 6.0
 RISK_HIGH_ATR_TP1_RR = 1.2
 RISK_HIGH_RSI_THRESHOLD = 76.0
@@ -269,7 +279,14 @@ def load_auto_thresholds():
         log.warning(f"auto thresholds load failed: {e}")
 
 
-PROGRAM_TAG = "🤖 [V5]"
+def load_optimized_thresholds():
+    """عتبات الـ Auto Parameter Optimizer (state/optimized_thresholds.json).
+    بتتحمّل قبل الـ self-learning، فالـ self-learning يقدر يضبطها بخطوات صغيرة فوقها."""
+    if v5x is not None:
+        v5x.load_optimized(globals(), V5X_OPTIMIZABLE, log)
+
+
+PROGRAM_TAG = "🤖 [V5.1]"
 if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
     log.warning("TELEGRAM_BOT_TOKEN أو TELEGRAM_CHAT_ID غير موجودين — سيعمل بدون إرسال.")
 
@@ -749,15 +766,18 @@ def is_likely_wash_trading(x):
 # Risk model
 # ============================================================
 
-def compute_risk_levels(entry, atr_val, rsi_val, liquidity):
+def compute_risk_levels(entry, atr_val, rsi_val, liquidity, atr_mult=None, min_sl=None,
+                        max_sl=None, rr1=None, rr2=None, rr3=None):
+    """الوقف والأهداف. الـ kwargs بتتستخدم لأنواع الفرص (Scalping/Swing)؛ غير كده ثوابت الماسح."""
     if not entry or entry <= 0:
         return None
     atr_use = atr_val if (atr_val and atr_val > 0) else 4.0
 
-    sl_pct_raw = atr_use * RISK_ATR_MULT_SL
-    sl_pct = max(RISK_MIN_SL_PCT, min(sl_pct_raw, RISK_MAX_SL_PCT))
+    sl_pct_raw = atr_use * (atr_mult if atr_mult is not None else RISK_ATR_MULT_SL)
+    sl_pct = max(min_sl if min_sl is not None else RISK_MIN_SL_PCT,
+                 min(sl_pct_raw, max_sl if max_sl is not None else RISK_MAX_SL_PCT))
 
-    tp1_rr = RISK_RR_TP1
+    tp1_rr = rr1 if rr1 is not None else RISK_RR_TP1
     notes = []
     if atr_use > RISK_HIGH_ATR_THRESHOLD:
         tp1_rr = min(tp1_rr, RISK_HIGH_ATR_TP1_RR)
@@ -769,12 +789,14 @@ def compute_risk_levels(entry, atr_val, rsi_val, liquidity):
         tp1_rr = min(tp1_rr, RISK_LOW_LIQ_TP1_RR)
         notes.append("سيولة منخفضة → TP1 أقرب")
 
-    tp2_rr = max(RISK_RR_TP2, tp1_rr + 0.5)
+    tp2_rr = max(rr2 if rr2 is not None else RISK_RR_TP2, tp1_rr + 0.5)
+    tp3_rr = max(rr3 if rr3 is not None else RISK_RR_TP3, tp2_rr + 0.5)
 
     sl_price = entry * (1 - sl_pct / 100.0)
     risk_per_unit = entry - sl_price
     tp1_price = entry + risk_per_unit * tp1_rr
     tp2_price = entry + risk_per_unit * tp2_rr
+    tp3_price = entry + risk_per_unit * tp3_rr
 
     return {
         "entry": entry,
@@ -786,6 +808,9 @@ def compute_risk_levels(entry, atr_val, rsi_val, liquidity):
         "tp2": tp2_price,
         "tp2_pct": pct(tp2_price, entry),
         "tp2_rr": tp2_rr,
+        "tp3": tp3_price,
+        "tp3_pct": pct(tp3_price, entry),
+        "tp3_rr": tp3_rr,
         "atr_used": atr_use,
         "notes": notes,
     }
@@ -1203,6 +1228,12 @@ def enrich_smart_money(x):
         x.update({"orderbook_imbalance": None, "oi_change_pct": None, "smart_money_score": 50.0})
         x["final_rank"] = float(x.get("score", 0))
         return x
+    if v5x is not None:
+        # V5.1: OBI متعدد النطاقات + OI (15m/1h + regime) + Whales + ML + Bayesian
+        try:
+            return v5x.enrich(x, smart_weight=SMART_MONEY_WEIGHT)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("V5.1 enrich failed %s: %s — fallback V5", x.get("symbol"), exc)
     sym = x.get("symbol")
     current_smart_context[sym] = {
         "buy_pressure": x.get("buy_pressure", 0.5),
@@ -1749,6 +1780,16 @@ def safe_fmt(val, fmt=".2f", default=0):
 
 
 def format_final(x, confirmations, cross_label=None, cross_detail=None):
+    if v5x is not None:
+        try:
+            from v5ext.telegram_ar import format_final_ar
+            return format_final_ar(x, confirmations, cross_label, cross_detail, PROGRAM_TAG)
+        except Exception as exc:  # noqa: BLE001
+            log.warning(f"Arabic message builder failed, fallback: {exc}")
+    return format_final_legacy(x, confirmations, cross_label, cross_detail)
+
+
+def format_final_legacy(x, confirmations, cross_label=None, cross_detail=None):
     r = x.get("risk") or {}
     risk_section = ""
     if r:
@@ -1895,7 +1936,7 @@ def maybe_cleanup_logs(force=False):
 
 TRACK_COLUMNS = [
     "final_time_utc", "symbol", "setup", "score",
-    "entry_price", "sl", "sl_pct", "tp1", "tp1_pct", "tp2", "tp2_pct",
+    "entry_price", "sl", "sl_pct", "tp1", "tp1_pct", "tp2", "tp2_pct", "tp3", "tp3_pct", "horizon",
     "atr_used", "quote_volume", "liquidity",
     "gain_5m_at_alert", "gain_15m_at_alert",
     "gain_1h_at_alert", "gain_24h_at_alert",
@@ -1903,12 +1944,16 @@ TRACK_COLUMNS = [
     "result_5m", "result_15m", "result_30m",
     "result_1h", "result_4h", "result_24h", "status",
     "lane", "outcome", "exit_pct", "outcome_min",
-]
+] + ["trade_status", "tp_hits", "warned", "exit_reason", "trade_pnl_pct", "trade_minutes",
+      "closed_time_utc", "timeout_min"] + (list(v5x.TRACK_EXTRA_COLUMNS) if v5x is not None else [])
+TRADE_COLUMNS = ["trade_status", "tp_hits", "warned", "exit_reason", "trade_pnl_pct",
+                 "trade_minutes", "closed_time_utc", "timeout_min"]
 
 # أعمدة نصية لازم تقرا object — لو فاضية بانداس بيحوّلها float64
 # وبيرفض الكتابة النصية فيها (Invalid value 'SL' for dtype 'float64')
 TRACK_STR_COLUMNS = ("final_time_utc", "symbol", "setup", "liquidity",
-                     "status", "lane", "outcome")
+                     "status", "lane", "outcome", "oi_regime", "fng_label", "horizon",
+                     "trade_status", "tp_hits", "exit_reason", "closed_time_utc")
 
 
 def read_track_file():
@@ -1991,6 +2036,9 @@ def save_track(track):
         "tp1_pct": track.get("tp1_pct"),
         "tp2": track.get("tp2"),
         "tp2_pct": track.get("tp2_pct"),
+        "tp3": track.get("tp3"),
+        "tp3_pct": track.get("tp3_pct"),
+        "horizon": track.get("horizon"),
         "atr_used": track.get("atr_used"),
         "quote_volume": track["quote_volume"],
         "liquidity": track["liquidity"],
@@ -2014,6 +2062,9 @@ def save_track(track):
         "exit_pct": track.get("exit_pct"),
         "outcome_min": track.get("outcome_min"),
     }
+    row.update({k: track.get(k) for k in TRADE_COLUMNS})
+    if v5x is not None:
+        row.update(track.get("v5x") or {})
     columns = list(row.keys())
     try:
         if os.path.exists(TRACK_FILE) and os.path.getsize(TRACK_FILE) > 0:
@@ -2049,18 +2100,39 @@ def _first_minute_after(ts_sec):
     return (int(ts_sec // 60) + 1) * 60 * 1000
 
 
+def _ensure_trade_state(track):
+    """حالة إدارة الصفقة (أهداف جزئية + تحريك الوقف). بتتعمل للإشارات القديمة كمان."""
+    if track.get("mgmt") is not None:
+        return track["mgmt"]
+    entry, sl, tp1, tp2 = (track.get(k) for k in ("entry_price", "sl", "tp1", "tp2"))
+    if not (entry and sl and tp1 and tp2):
+        track["mgmt"] = {"closed": True, "exit_reason": "NO_PLAN", "realized_pct": 0.0,
+                         "remaining": 0.0, "stage": 0, "close_min": 0}
+        return track["mgmt"]
+    tp3 = track.get("tp3") or entry + (entry - sl) * max(RISK_RR_TP3, 4.5)
+    from v5ext.trade_manager import new_state
+    track["mgmt"] = new_state(entry, sl, tp1, tp2, tp3, track.get("timeout_min") or TRADE_TIMEOUT_MIN)
+    return track["mgmt"]
+
+
 def walk_track_path(symbol, track, now_ms):
     """
-    يمشي على شموع 1m من لحظة الإشارة ويحدد مين اتحقق الأول: SL ولا TP1 (أو TIMEOUT).
-    - لو SL وTP1 في نفس الشمعة -> SL (افتراض متحفّظ).
-    - بيحدّث peak/lowest من high/low الشموع (مش من سعر لحظي بس).
+    يمشي على شموع 1m من لحظة الإشارة:
+    1) نتيجة التعلّم (outcome): مين اتحقق الأول SL ولا TP1 (أو TIMEOUT) — زي ما كان.
+    2) إدارة الصفقة (mgmt): TP1/TP2/TP3 جزئي + نقل الوقف + تنبيه الفشل → أحداث في track["alerts"].
+    - لو SL وTP في نفس الشمعة -> SL (افتراض متحفّظ).
     """
+    from v5ext.trade_manager import step as mgmt_step
     entry = track["entry_price"]
     sl, tp1 = track.get("sl"), track.get("tp1")
+    timeout = track.get("timeout_min") or TRADE_TIMEOUT_MIN
+    st = _ensure_trade_state(track)
     t0_ms = _first_minute_after(track["start_ts"])
     start_ms = int(track.get("last_k_ms") or t0_ms)
     limit = 1000
-    for _ in range(3):
+    for _ in range(5):
+        if track.get("outcome") is not None and st.get("closed"):
+            return
         rows = get_json("/api/v3/klines",
                         {"symbol": symbol, "interval": "1m", "startTime": start_ms, "limit": limit},
                         retries=2)
@@ -2079,14 +2151,65 @@ def walk_track_path(symbol, track, now_ms):
                     track["outcome"], track["exit_pct"] = "SL", pct(sl, entry)
                 elif hi >= tp1:
                     track["outcome"], track["exit_pct"] = "TP1", pct(tp1, entry)
-                elif minutes_in >= TRADE_TIMEOUT_MIN:
+                elif minutes_in >= timeout:
                     track["outcome"], track["exit_pct"] = "TIMEOUT", pct(cl, entry)
                 if track.get("outcome") is not None:
                     track["outcome_min"] = round(minutes_in + 1, 1)
+            if not st.get("closed"):
+                for ev in mgmt_step(st, hi, lo, cl, minutes_in + 1):
+                    track.setdefault("alerts", []).append(
+                        {"event": ev, "price": st["last_price"] if ev in ("SL", "BE", "LOCK_TP1", "TP3", "TIMEOUT")
+                         else {"TP1": st["tp1"], "TP2": st["tp2"]}.get(ev, cl),
+                         "ts": close_t, "minute": round(minutes_in + 1, 1)})
+                if st.get("closed") and not track.get("closed_time_utc"):
+                    track["closed_time_utc"] = datetime.fromtimestamp(close_t / 1000, tz=timezone.utc).isoformat()
             track["last_k_ms"] = open_t + 60000
         if len(rows) < limit:
             return
         start_ms = int(track["last_k_ms"])
+
+
+def send_trade_alerts(track):
+    """يبعت تنبيهات الأهداف/الفشل/الإغلاق اللي اتجمعت (مرة واحدة لكل حدث)."""
+    alerts = track.get("alerts") or []
+    if not alerts:
+        return False
+    # لو التنبيه المبكر والإغلاق وصلوا مع بعض (تأخير في التشغيل) → نبعت الإغلاق بس
+    closing = {"SL", "BE", "LOCK_TP1", "TP3", "TIMEOUT"}
+    if any(a["event"] in closing for a in alerts):
+        alerts = [a for a in alerts if a["event"] != "WARN"]
+    sent_any = False
+    for a in alerts:
+        try:
+            from v5ext.telegram_ar import format_trade_alert
+            msg = format_trade_alert(track, a, PROGRAM_TAG)
+        except Exception as exc:  # noqa: BLE001
+            msg = f"{PROGRAM_TAG} {track['symbol']}: {a.get('event')} @ {a.get('price')}"
+            log.warning(f"alert format failed: {exc}")
+        telegram_send(msg)
+        log.info(msg)
+        track.setdefault("alerts_sent", []).append(a["event"])
+        sent_any = True
+    track["alerts"] = []
+    return sent_any
+
+
+def _apply_trade_fields(track):
+    st = track.get("mgmt") or {}
+    stage_names = {0: "", 1: "TP1", 2: "TP1+TP2"}
+    hits = "TP1+TP2+TP3" if st.get("exit_reason") == "TP3" else stage_names.get(st.get("stage", 0), "")
+    track["tp_hits"] = hits
+    track["warned"] = int(bool(st.get("warned")))
+    if st.get("closed") and st.get("exit_reason") != "NO_PLAN":
+        from v5ext.trade_manager import net_pct
+        track["trade_status"] = "CLOSED"
+        track["exit_reason"] = st.get("exit_reason")
+        track["trade_pnl_pct"] = round(net_pct(st), 4)
+        track["trade_minutes"] = st.get("close_min")
+    elif st.get("exit_reason") == "NO_PLAN":
+        track["trade_status"] = "NO_PLAN"
+    else:
+        track["trade_status"] = "OPEN"
 
 
 def notify_outcome(track):
@@ -2096,10 +2219,28 @@ def notify_outcome(track):
     if oc not in ("TP1", "SL", "TIMEOUT"):
         return
     icon = {"TP1": "✅", "SL": "❌", "TIMEOUT": "⏱️"}[oc]
-    msg = (f"{PROGRAM_TAG} {icon} نتيجة إشارة {track['symbol']}: {oc}\n"
-           f"Lane: {track.get('lane', '-')} | Setup: {track.get('setup', '-')}\n"
+    name = {"TP1": "تحقق الهدف الأول (TP1)", "SL": "ضرب وقف الخسارة (Stop Loss)",
+            "TIMEOUT": "انتهت مدة المتابعة بدون هدف أو وقف (Timeout)"}[oc]
+    reached = ""
+    mfe = track.get("mfe_pct") or 0
+    for lbl, key in (("الثالث", "tp3_pct"), ("الثاني", "tp2_pct")):
+        tp = track.get(key)
+        if tp and mfe >= tp:
+            reached = f"\n🏁 السعر لمس الهدف {lbl} أثناء المتابعة (+{tp:.2f}%)"
+            break
+    lane_ar, hz_ar = track.get("lane") or "-", track.get("horizon") or "-"
+    try:
+        from v5ext.telegram_ar import HORIZONS, LANE_AR
+        lane_ar = LANE_AR.get(lane_ar, lane_ar)
+        hz_ar = HORIZONS[hz_ar][0] if hz_ar in HORIZONS else hz_ar
+    except Exception:  # noqa: BLE001
+        pass
+    msg = (f"{PROGRAM_TAG} {icon} نتيجة إشارة {track['symbol']}\n"
+           f"النتيجة: {name}\n"
+           f"المسار (Lane): {lane_ar} | النوع: {hz_ar}\n"
            f"الخروج: {track.get('exit_pct', 0):+.2f}% بعد {track.get('outcome_min', 0):.0f} دقيقة\n"
-           f"أقصى ربح لحظي: {track.get('mfe_pct', 0):+.2f}% | أقصى نزول: {track.get('mae_pct', 0):+.2f}%")
+           f"أقصى صعود (MFE): {mfe:+.2f}% | أقصى هبوط (MAE): {track.get('mae_pct', 0):+.2f}%"
+           f"{reached}")
     telegram_send(msg)
     track["notified"] = True
 
@@ -2107,58 +2248,61 @@ def notify_outcome(track):
 def update_tracking(tickers):
     now = time.time()
     now_ms = int(now * 1000)
-    MAX_AGE_MIN = 1500
     for symbol, track in list(active_tracks.items()):
         elapsed_min = (now - track["start_ts"]) / 60
         entry = track["entry_price"]
-        changed = False
-
+        timeout = track.get("timeout_min") or TRADE_TIMEOUT_MIN
+        max_age = max(1500, timeout + 60)
+        st = _ensure_trade_state(track)
+        was_closed = bool(st.get("closed"))
         had_outcome = track.get("outcome") is not None
         try:
             walk_track_path(symbol, track, now_ms)
         except Exception as e:
             log.debug(f"walk_track_path failed for {symbol}: {e}")
-        if track.get("outcome") is not None and not had_outcome:
-            changed = True
+        changed = (track.get("outcome") is not None and not had_outcome) or bool(track.get("alerts"))
 
         price = tickers.get(symbol, {}).get("price")
-        if price is None or price <= 0:
-            notify_outcome(track)
-            if elapsed_min > MAX_AGE_MIN:
+        if price and price > 0:
+            track["peak_price"] = max(track["peak_price"], price)
+            track["lowest_price"] = min(track["lowest_price"], price)
+            for target in TRACK_MINUTES:
+                if target not in track["results"] and elapsed_min >= target:
+                    track["results"][target] = pct(price, entry)
+                    changed = True
+            # الشموع ماوصلتش (خطأ شبكة) والمدة خلصت → نقفل بالسعر الحالي
+            if elapsed_min >= timeout + 10:
                 if track.get("outcome") is None:
-                    track["outcome"], track["exit_pct"] = "TIMEOUT", track.get("mae_pct", 0.0)
-                track["status"] = "COMPLETED"
-                safe_save_track(track)
-                del active_tracks[symbol]
-            elif changed:
-                safe_save_track(track)
-            continue
-
-        track["peak_price"] = max(track["peak_price"], price)
-        track["lowest_price"] = min(track["lowest_price"], price)
+                    track["outcome"], track["exit_pct"] = "TIMEOUT", pct(price, entry)
+                    track["outcome_min"] = round(elapsed_min, 1)
+                    changed = True
+                if not st.get("closed"):
+                    from v5ext.trade_manager import step as mgmt_step
+                    st["timeout_min"] = 0
+                    for ev in mgmt_step(st, price, price, price, elapsed_min):
+                        track.setdefault("alerts", []).append(
+                            {"event": ev, "price": price, "ts": now_ms, "minute": round(elapsed_min, 1)})
+                    track["closed_time_utc"] = datetime.now(timezone.utc).isoformat()
+                    changed = True
         track["mfe_pct"] = pct(track["peak_price"], entry)
         track["mae_pct"] = pct(track["lowest_price"], entry)
 
-        for target in TRACK_MINUTES:
-            if target not in track["results"] and elapsed_min >= target:
-                track["results"][target] = pct(price, entry)
-                changed = True
-
-        if elapsed_min >= TRADE_TIMEOUT_MIN + 10 and track.get("outcome") is None:
-            # ماقدرناش نجيب الشموع (خطأ شبكة) -> نقفل بالسعر الحالي
-            track["outcome"], track["exit_pct"] = "TIMEOUT", pct(price, entry)
-            track["outcome_min"] = round(elapsed_min, 1)
+        _apply_trade_fields(track)
+        if send_trade_alerts(track):
+            changed = True
+        if st.get("closed") and not was_closed:
             changed = True
 
-        if changed:
-            track["status"] = "TRACKING"
-            safe_save_track(track)
-        notify_outcome(track)
-
-        if elapsed_min >= 1440:
+        done = st.get("closed") and track.get("outcome") is not None and elapsed_min >= 1440
+        if done or elapsed_min > max_age:
+            if track.get("outcome") is None:
+                track["outcome"], track["exit_pct"] = "TIMEOUT", track.get("mae_pct", 0.0)
             track["status"] = "COMPLETED"
             safe_save_track(track)
             del active_tracks[symbol]
+        elif changed:
+            track["status"] = "TRACKING"
+            safe_save_track(track)
 
 
 def log_early_watch(x, now):
@@ -2202,6 +2346,10 @@ def start_final_tracking(x):
         "tp1_pct": r.get("tp1_pct"),
         "tp2": r.get("tp2"),
         "tp2_pct": r.get("tp2_pct"),
+        "tp3": r.get("tp3"),
+        "tp3_pct": r.get("tp3_pct"),
+        "horizon": x.get("horizon"),
+        "timeout_min": x.get("timeout_min") or TRADE_TIMEOUT_MIN,
         "atr_used": r.get("atr_used"),
         "quote_volume": x["quote_volume"],
         "liquidity": x["liquidity"],
@@ -2222,6 +2370,7 @@ def start_final_tracking(x):
         "outcome_min": None,
         "last_k_ms": None,
         "notified": False,
+        "v5x": v5x.track_fields(x) if v5x is not None else {},
     }
     safe_save_track(active_tracks[x["symbol"]])
 
@@ -2232,6 +2381,11 @@ def start_final_tracking(x):
 
 def maybe_final_signal(x, now):
     sym = x["symbol"]
+
+    # صفقة مفتوحة على نفس العملة لسه بتتابَع → مفيش إشارة جديدة (عشان المتابعة ما تتمسحش)
+    open_track = active_tracks.get(sym)
+    if open_track and not (open_track.get("mgmt") or {}).get("closed"):
+        return False
 
     if sym in final_cooldown:
         if now - final_cooldown[sym] < FINAL_COOLDOWN_HOURS * 3600:
@@ -2284,6 +2438,16 @@ def maybe_final_signal(x, now):
         final_x["risk"] = compute_risk_levels(live, final_x.get("atr_pct"),
                                               final_x.get("rsi14"), final_x["liquidity"])
 
+    # V5.1 gate: Fear&Greed + XGBoost + Bayesian + جدار بيع
+    if v5x is not None:
+        v5_ok, v5_reason = v5x.gate(x, final_lane)
+        for k in v5x.TRACK_EXTRA_COLUMNS + ["bayes_prior_src", "whale_window_min", "whale_threshold_usd"]:
+            if k in x:
+                final_x[k] = x[k]
+        if not v5_ok:
+            log.info(f"[V5.1] {sym}: FINAL blocked ({v5_reason})")
+            return False
+
     cross_label, cross_detail = cross_exchange_confirmation(sym)
 
     if SUPPRESS_ON_DIVERGENCE and cross_label == "DIVERGENCE":
@@ -2310,6 +2474,30 @@ def maybe_final_signal(x, now):
     log.info(f"[EntryQuality] {sym}: 1m confirmation passed metrics={entry_metrics}")
     final_cooldown[sym] = now
     candidates.pop(sym, None)
+
+    # نوع الفرصة (Scalping/Intraday/Swing) + وقف وأهداف مناسبة له + مدة متابعة مطابقة للرسالة
+    try:
+        from v5ext.trade_manager import HORIZONS, atr_pct as atr_from_bars, classify_horizon, horizon_risk
+        hz = classify_horizon(final_x)
+        atr_1h = None
+        if hz == "SWING":
+            try:
+                h1 = (get_json("/api/v3/klines", {"symbol": sym, "interval": "1h", "limit": 30}, retries=2) or [])[:-1]
+                atr_1h = atr_from_bars([float(r[2]) for r in h1], [float(r[3]) for r in h1],
+                                       [float(r[4]) for r in h1])
+            except Exception as exc:  # noqa: BLE001
+                log.debug(f"1h ATR failed {sym}: {exc}")
+        risk = horizon_risk(compute_risk_levels, final_x["price"], final_x, hz, atr_1h)
+        if risk is None:
+            hz = "INTRADAY"
+            risk = horizon_risk(compute_risk_levels, final_x["price"], final_x, hz)
+        if risk:
+            final_x["risk"] = risk
+        final_x["horizon"], final_x["timeout_min"] = hz, HORIZONS[hz][2]
+    except Exception as exc:  # noqa: BLE001
+        log.warning(f"horizon classification failed {sym}: {exc}")
+        final_x.setdefault("horizon", "INTRADAY")
+        final_x.setdefault("timeout_min", TRADE_TIMEOUT_MIN)
 
     msg = format_final(final_x, c["count"], cross_label, cross_detail)
     telegram_send(msg)
@@ -2384,6 +2572,14 @@ def run_cycle(symbols):
     current_tickers.clear()
     current_tickers.update(tickers)
     update_tracking(tickers)
+    if v5x is not None:
+        try:
+            from v5ext.performance import maybe_send_reports
+            sent = maybe_send_reports(meta, telegram_send, tag=PROGRAM_TAG)
+            if sent:
+                log.info(f"P&L reports sent: {sent}")
+        except Exception as exc:  # noqa: BLE001
+            log.warning(f"P&L report failed: {exc}")
 
     btc_safe, btc_15m, btc_1h = check_btc_market_health()
     if not btc_safe:
@@ -2391,6 +2587,13 @@ def run_cycle(symbols):
         return max(10, SCAN_EVERY_SECONDS - (time.time() - cycle_start))
 
     fetch_funding_rates_bulk()
+    if v5x is not None:
+        try:
+            ctx = v5x.start_cycle(btc_15m, btc_1h)
+            log.info(f"[V5.1] Fear&Greed={ctx.get('fng')} ({ctx.get('fng_label')}) | "
+                     f"BTC 15m={btc_15m:+.2f}% 1h={btc_1h:+.2f}%")
+        except Exception as exc:  # noqa: BLE001
+            log.debug(f"V5.1 cycle context failed: {exc}")
     now_dt = datetime.now(timezone.utc).isoformat()
     diagnostics = []
 
@@ -2441,6 +2644,8 @@ def run_cycle(symbols):
                     if compressed_gate(result):
                         maybe_compressed_alert(result, time.time())
                 else:
+                    if v5x is not None:
+                        v5x.attach_context(result)
                     results.append(result)
                     diagnostics.append({
                         "logged_time_utc": now_dt, "symbol": symbol, "stage": "WATCH_CANDIDATE",
@@ -2513,49 +2718,56 @@ def run_cycle(symbols):
 # Main
 # ============================================================
 
-load_auto_thresholds()
+def main():
+    global last_log_cleanup_ts
+    load_optimized_thresholds()
+    load_auto_thresholds()
 
-ONCE = "--once" in sys.argv
+    ONCE = "--once" in sys.argv
 
-init_results_file()
-load_state()
-update_shariah_list(force=False)
-maybe_cleanup_logs()
-last_log_cleanup_ts = time.time()
+    init_results_file()
+    load_state()
+    update_shariah_list(force=False)
+    maybe_cleanup_logs()
+    last_log_cleanup_ts = time.time()
 
-log.info("تحميل قائمة Binance...")
-try:
-    symbols = get_symbols()
-except Exception as e:
-    log.error(f"Cannot load symbols: {e}")
-    sys.exit(1)
-
-log.info(f"تم تحميل {len(symbols)} زوج USDT.")
-log.info("Scanner V5.0 experimental started" + (" (single run)." if ONCE else "."))
-
-if ONCE:
+    log.info("تحميل قائمة Binance...")
     try:
-        run_cycle(symbols)
+        symbols = get_symbols()
     except Exception as e:
-        log.exception(f"Scanner error: {e}")
-        save_state()
+        log.error(f"Cannot load symbols: {e}")
         sys.exit(1)
-    save_state()
-    sys.exit(0)
 
-while True:
-    try:
-        sleep_time = run_cycle(symbols)
+    log.info(f"تم تحميل {len(symbols)} زوج USDT.")
+    log.info("Scanner V5.1 experimental started" + (" (single run)." if ONCE else "."))
+
+    if ONCE:
+        try:
+            run_cycle(symbols)
+        except Exception as e:
+            log.exception(f"Scanner error: {e}")
+            save_state()
+            sys.exit(1)
         save_state()
-        if time.time() - last_log_cleanup_ts >= LOG_CLEANUP_INTERVAL_HOURS * 3600:
-            update_shariah_list(force=False)
-            last_log_cleanup_ts = time.time()
-        log.info(f"Next scan in {sleep_time:.0f}s...")
-        time.sleep(sleep_time)
-    except KeyboardInterrupt:
-        log.info("Scanner stopped.")
-        save_state()
-        break
-    except Exception as e:
-        log.exception(f"Scanner error: {e}")
-        time.sleep(30)
+        sys.exit(0)
+
+    while True:
+        try:
+            sleep_time = run_cycle(symbols)
+            save_state()
+            if time.time() - last_log_cleanup_ts >= LOG_CLEANUP_INTERVAL_HOURS * 3600:
+                update_shariah_list(force=False)
+                last_log_cleanup_ts = time.time()
+            log.info(f"Next scan in {sleep_time:.0f}s...")
+            time.sleep(sleep_time)
+        except KeyboardInterrupt:
+            log.info("Scanner stopped.")
+            save_state()
+            break
+        except Exception as e:
+            log.exception(f"Scanner error: {e}")
+            time.sleep(30)
+
+
+if __name__ == "__main__":
+    main()

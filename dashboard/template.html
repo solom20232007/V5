@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V5.1 Pump Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0b0f14; --panel:#121821; --panel2:#18202b; --line:#243041; --text:#e6edf3; --muted:#8b98a9;
+  --up:#2fd18b; --down:#ff5c6c; --warn:#f5b84a; --accent:#5aa9ff; --violet:#b48cff;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){--bg:#f5f7fa;--panel:#ffffff;--panel2:#f0f3f7;--line:#dde3ea;--text:#18212c;--muted:#5e6b7a;
+    --up:#0f9d63;--down:#d63a4a;--warn:#b7791f;--accent:#2563eb;--violet:#7c3aed}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 "IBM Plex Sans Arabic",system-ui,sans-serif}
+.mono,td.num,.kv{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:1320px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+h1{font-size:20px;margin:0;letter-spacing:.2px} h1 span{color:var(--accent)}
+.sub{color:var(--muted);font-size:12px}
+.fng{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 14px}
+.fng b{font:600 22px "IBM Plex Mono",monospace}
+.bar{width:140px;height:8px;border-radius:6px;background:linear-gradient(90deg,#ff5c6c,#f5b84a 45%,#9fb3c8 50%,#7bd88f 60%,#2fd18b);position:relative}
+.bar i{position:absolute;top:-4px;width:3px;height:16px;background:var(--text);border-radius:2px}
+.grid{display:grid;gap:14px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;min-width:0}
+.kpi .l{color:var(--muted);font-size:12px}.kpi .v{font:600 22px "IBM Plex Mono",monospace;margin-top:4px}
+.kpi .s{color:var(--muted);font-size:11px;margin-top:2px}
+.two{grid-template-columns:1.6fr 1fr}.half{grid-template-columns:1fr 1fr}
+@media (max-width:900px){.two,.half{grid-template-columns:1fr}}
+h2{font-size:14px;margin:0 0 10px;color:var(--muted);font-weight:500;display:flex;justify-content:space-between;align-items:center}
+.tabs button{background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer}
+.tabs button.on{color:var(--text);border-color:var(--accent)}
+.chartbox{position:relative;height:250px}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{color:var(--muted);font-weight:500;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--panel)}
+td{padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td.num{text-align:left;direction:ltr}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.p-TP1{background:color-mix(in srgb,var(--up) 18%,transparent);color:var(--up)}
+.p-SL{background:color-mix(in srgb,var(--down) 18%,transparent);color:var(--down)}
+.p-TIMEOUT{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.p-TRACK{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+.up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--muted)}
+.empty{color:var(--muted);padding:26px 4px;text-align:center;font-size:13px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:12.5px}.kv span:nth-child(odd){color:var(--muted);font-family:"IBM Plex Sans Arabic",sans-serif}
+.hbar{display:flex;align-items:center;gap:8px;font-size:12px;margin:3px 0}
+.hbar div{height:8px;background:var(--violet);border-radius:4px}
+.hbar span{width:150px;color:var(--muted);direction:ltr;text-align:left;font-family:"IBM Plex Mono",monospace;flex-shrink:0}
+.note{font-size:11.5px;color:var(--muted);margin-top:8px}
+.scroll{max-height:440px;overflow:auto}
+section{margin-bottom:14px}
+footer{color:var(--muted);font-size:11.5px;text-align:center;margin-top:24px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div><h1>🤖 Early-Pump Scanner <span>V5.1</span></h1><div class="sub" id="gen"></div></div>
+  <div class="fng" id="fngBox"></div>
+</header>
+
+<div class="grid kpis" id="kpis"></div>
+
+<section class="card"><h2>المكسب والخسارة الفعلي من إشارات البوت<span class="tabs" id="pnlTabs"><button data-k="daily" class="on">يومي</button> <button data-k="weekly">أسبوعي</button> <button data-k="monthly">شهري</button></span></h2>
+  <div class="tbl scroll" id="pnl"></div>
+  <div class="note">صافي بعد الرسوم والانزلاق، على أساس خطة الأهداف في كل إشارة (ثلث عند كل هدف + تحريك الوقف). "$" = لو دخلت بنفس المبلغ في كل إشارة. الأسبوع من السبت للجمعة، بتوقيت القاهرة.</div></section>
+
+<section class="grid two">
+  <div class="card"><h2>منحنى رأس المال (محاكاة المحفظة)<span class="tabs" id="eqTabs"><button data-k="live" class="on">الإشارات الحية</button> <button data-k="bt">Backtest</button></span></h2>
+    <div class="chartbox"><canvas id="eqChart"></canvas></div><div class="note" id="eqNote"></div></div>
+  <div class="card"><h2>Fear &amp; Greed — آخر 120 يوم</h2><div class="chartbox"><canvas id="fngChart"></canvas></div></div>
+</section>
+
+<section class="card"><h2>آخر الإشارات النهائية</h2><div class="tbl scroll" id="signals"></div></section>
+
+<section class="grid half">
+  <div class="card"><h2>Bayesian — احتمال النجاح لكل Lane</h2><div class="tbl" id="bayes"></div>
+    <div class="note">mean = متوسط الـ posterior (Beta). lower80 = الحد الأدنى بثقة 80%. الـ backtest وزنه محدود والأداء الحي يغلب مع الوقت.</div></div>
+  <div class="card"><h2>XGBoost Model (تجريبي)</h2><div id="model"></div></div>
+</section>
+
+<section class="grid half">
+  <div class="card"><h2>Backtest (قواعد الماسح على بيانات تاريخية)</h2><div id="bt"></div></div>
+  <div class="card"><h2>Auto Parameter Optimization</h2><div id="opt"></div></div>
+</section>
+
+<section class="card"><h2>آخر مرشحي المراقبة (Watch)</h2><div class="tbl scroll" id="watch"></div></section>
+
+<footer>⚠️ أداة تحليلية تجريبية — ليست توصية استثمارية. النتائج السابقة والمحاكاة لا تضمن نتائج مستقبلية.</footer>
+</div>
+
+<script>
+const D = /*__DATA__*/null;
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const f = (v, d=2, suf='') => (v===null||v===undefined||v==='' || Number.isNaN(+v)) ? '—' : (+v).toFixed(d)+suf;
+const pctS = (v,d=2) => (v===null||v===undefined||Number.isNaN(+v)) ? '—' : `<span class="${+v>=0?'up':'down'}">${+v>=0?'+':''}${(+v).toFixed(d)}%</span>`;
+const empty = t => `<div class="empty">${t}</div>`;
+
+$('gen').textContent = 'آخر تحديث: ' + (D.generated||'');
+
+// F&G
+(() => {
+  const v = D.fng && D.fng.value;
+  const lbl = {EXTREME_FEAR:'خوف شديد',FEAR:'خوف',NEUTRAL:'محايد',GREED:'طمع',EXTREME_GREED:'طمع شديد'}[D.fng && D.fng.label] || 'غير متاح';
+  $('fngBox').innerHTML = `<div><div class="sub">Fear &amp; Greed</div><b>${v ?? '—'}</b></div><div><div class="bar">${v!=null?`<i style="right:calc(${100-v}% - 1px)"></i>`:''}</div><div class="sub" style="margin-top:6px">${lbl}</div></div>`;
+})();
+
+// KPIs
+(() => {
+  const k = D.kpi||{}, lp = D.live_portfolio||{};
+  const rate = (k.closed||0) >= k.min_for_rate && k.win_rate!=null ? f(k.win_rate*100,0,'%') : '—';
+  const rate30 = (k.trades_30d||0) >= k.min_for_rate && k.win_rate_30d!=null ? f(k.win_rate_30d*100,0,'%') : '—';
+  const tiles = [
+    ['إشارات اتبعتت', k.signals ?? 0, k.last_signal ? 'آخر إشارة '+k.last_signal.replace('T',' ') : ''],
+    ['صفقات مفتوحة دلوقتي', k.open ?? 0, 'البوت بيتابعها'],
+    ['صفقات اتقفلت', k.closed ?? 0, `${k.wins||0} ناجحة`],
+    ['نسبة النجاح الفعلية', rate, (k.closed||0) < k.min_for_rate ? `بتظهر بعد ${k.min_for_rate} صفقات` : 'من البداية'],
+    ['نسبة النجاح آخر 30 يوم', rate30, `${k.trades_30d||0} صفقة`],
+    ['صافي الربح/الخسارة', k.total_pct!=null ? (k.total_pct>=0?'+':'')+f(k.total_pct,2,'%') : '—', `= ${k.usd>=0?'+':''}${f(k.usd,2)}$ لو ${k.stake}$ للإشارة`],
+    ['محاكاة المحفظة', lp.return_pct!=null ? f(lp.return_pct,2,'%') : '—', lp.max_drawdown_pct!=null ? 'أقصى تراجع '+f(lp.max_drawdown_pct,1,'%') : 'مخاطرة 1% للصفقة'],
+  ];
+  $('kpis').innerHTML = tiles.map(([l,v,s]) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s||''}</div></div>`).join('');
+})();
+
+// P&L tables
+function drawPnl(kind){
+  const rows = ((D.pnl||{})[kind])||[];
+  if (!rows.length) { $('pnl').innerHTML = empty('لسه مفيش صفقات اتقفلت'); return; }
+  $('pnl').innerHTML = `<table><thead><tr><th>${{daily:'اليوم',weekly:'الأسبوع (من السبت)',monthly:'الشهر'}[kind]}</th><th>صفقات</th><th>ناجحة</th><th>نسبة النجاح</th><th>صافي %</th><th>صافي $</th></tr></thead><tbody>${
+    rows.map(r=>`<tr><td class="num">${r.period}</td><td class="num">${r.trades}</td><td class="num">${r.wins}</td><td class="num">${f(r.win_rate*100,0,'%')}</td><td class="num">${pctS(r.total_pct)}</td><td class="num ${r.usd>=0?'up':'down'}">${r.usd>=0?'+':''}${f(r.usd,2)}$</td></tr>`).join('')
+  }</tbody></table>`;
+}
+document.querySelectorAll('#pnlTabs button').forEach(b => b.onclick = () => {document.querySelectorAll('#pnlTabs button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); drawPnl(b.dataset.k);});
+drawPnl('daily');
+
+// Charts
+Chart.defaults.color = css('--muted'); Chart.defaults.borderColor = css('--line');
+Chart.defaults.font.family = '"IBM Plex Mono", monospace';
+let eqChart;
+function drawEq(kind){
+  const pts = kind==='bt' ? D.bt_equity : D.live_equity;
+  const s = kind==='bt' ? (D.bt_portfolio||{}) : (D.live_portfolio||{});
+  if (eqChart) eqChart.destroy();
+  const box = $('eqChart').parentElement;
+  if (!pts || pts.length < 2) { $('eqNote').textContent = 'لا توجد صفقات كافية بعد.'; eqChart=null; return; }
+  const cfg = s.config||{};
+  $('eqNote').textContent = `رأس مال ${cfg.initial_capital} | مخاطرة ${(cfg.risk_per_trade*100||0).toFixed(1)}%/صفقة | أقصى ${cfg.max_positions} مراكز | عائد ${f(s.return_pct,2,'%')} | Max DD ${f(s.max_drawdown_pct,1,'%')} | تم تخطي ${s.skipped_max_positions||0} إشارة`;
+  const up = pts[pts.length-1].v >= pts[0].v;
+  eqChart = new Chart($('eqChart'), {type:'line', data:{labels:pts.map(p=>p.t), datasets:[{data:pts.map(p=>p.v), borderColor: up?css('--up'):css('--down'), borderWidth:1.6, pointRadius:0, fill:true, backgroundColor:(up?css('--up'):css('--down'))+'18', tension:.15}]},
+    options:{maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:6}}, y:{ticks:{maxTicksLimit:6}}}}});
+}
+document.querySelectorAll('#eqTabs button').forEach(b => b.onclick = () => {document.querySelectorAll('#eqTabs button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); drawEq(b.dataset.k);});
+drawEq((D.live_equity||[]).length>1 ? 'live' : 'bt');
+if ((D.live_equity||[]).length<2 && (D.bt_equity||[]).length>1){document.querySelectorAll('#eqTabs button').forEach(x=>x.classList.toggle('on', x.dataset.k==='bt'));}
+
+if ((D.fng_history||[]).length) {
+  const h = D.fng_history;
+  new Chart($('fngChart'), {type:'line', data:{labels:h.map(p=>p.d), datasets:[{data:h.map(p=>p.v), borderColor:css('--warn'), borderWidth:1.5, pointRadius:0}]},
+    options:{maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{min:0,max:100,ticks:{stepSize:20}}, x:{ticks:{maxTicksLimit:5}}}}});
+} else { $('fngChart').parentElement.innerHTML = empty('تاريخ المؤشر يُحمَّل بعد أول تشغيل لـ research.py'); }
+
+// Signals
+(() => {
+  const rows = D.signals||[];
+  if (!rows.length) { $('signals').innerHTML = empty('لا توجد إشارات بعد'); return; }
+  const HZ = {SCALPING:'سريعة',INTRADAY:'خلال اليوم',SWING:'متعددة الأيام'};
+  const EX = {TP3:'كل الأهداف',LOCK_TP1:'TP2 ثم TP1',BE:'TP1 ثم تعادل',SL:'وقف خسارة',TIMEOUT:'انتهاء المدة',NO_PLAN:'—'};
+  const ok = v => v!==null && v!==undefined && v!=='' && v!=='nan';
+  const state = r => {
+    if (r.trade_status==='OPEN') return `<span class="pill p-TRACK">مفتوحة${ok(r.tp_hits)?' • '+r.tp_hits:''}${+r.warned?' • ⚠️':''}</span>`;
+    if (r.trade_status==='CLOSED') { const c = +r.trade_pnl_pct>0 ? 'p-TP1' : (r.exit_reason==='TIMEOUT'?'p-TIMEOUT':'p-SL'); return `<span class="pill ${c}">${EX[r.exit_reason]||r.exit_reason}</span>`; }
+    if (ok(r.outcome)) return `<span class="pill p-${r.outcome}">${r.outcome}</span>`;
+    return `<span class="pill p-TRACK">${r.status||'—'}</span>`;
+  };
+  const pnl = r => ok(r.trade_pnl_pct) ? pctS(r.trade_pnl_pct) : (ok(r.exit_pct) && !ok(r.trade_status) ? pctS(r.exit_pct) : '—');
+  $('signals').innerHTML = `<table><thead><tr><th>الوقت UTC</th><th>العملة</th><th>النوع</th><th>Lane</th><th>Score</th><th>Entry</th><th>الوقف</th><th>TP1</th><th>TP2</th><th>TP3</th><th>الحالة</th><th>صافي النتيجة</th><th>أقصى صعود</th><th>أقصى هبوط</th><th>OBI</th><th>Whales</th><th>OI 1h</th><th>F&amp;G</th></tr></thead><tbody>${
+    rows.map(r => `<tr><td class="num">${String(r.final_time_utc||'').slice(0,16).replace('T',' ')}</td><td><b>${r.symbol}</b></td><td>${HZ[r.horizon]||'—'}</td><td>${r.lane||'—'}</td><td class="num">${f(r.score,0)}</td><td class="num">${r.entry_price ?? '—'}</td><td class="num down">-${f(r.sl_pct,1)}%</td><td class="num up">+${f(r.tp1_pct,1)}%</td><td class="num up">${ok(r.tp2_pct)?'+'+f(r.tp2_pct,1)+'%':'—'}</td><td class="num up">${ok(r.tp3_pct)?'+'+f(r.tp3_pct,1)+'%':'—'}</td><td>${state(r)}</td><td class="num">${pnl(r)}</td><td class="num">${pctS(r.mfe_pct)}</td><td class="num">${pctS(r.mae_pct)}</td><td class="num">${f(r.obi_1_0pct,2)}</td><td class="num">${f(r.whale_net_ratio,2)}</td><td class="num">${f(r.oi_change_1h,2)}</td><td class="num">${r.fng ?? '—'}</td></tr>`).join('')
+  }</tbody></table>`;
+})();
+
+// Bayes
+(() => {
+  const L = (D.bayes||{}).lanes||{};
+  const ks = Object.keys(L);
+  if (!ks.length) { $('bayes').innerHTML = empty('شغّل research.py bayes لحساب الإحصائيات'); return; }
+  $('bayes').innerHTML = `<table><thead><tr><th>Lane</th><th>mean</th><th>lower80</th><th>Backtest W/N</th><th>حي W/N</th></tr></thead><tbody>${
+    ks.map(k => { const s=L[k]; return `<tr><td><b>${k}</b></td><td class="num">${f(s.mean*100,1,'%')}</td><td class="num">${f(s.lower_80*100,1,'%')}</td><td class="num">${s.bt_wins}/${s.bt_wins+s.bt_losses}</td><td class="num">${s.live_wins}/${s.live_wins+s.live_losses}</td></tr>`;}).join('')
+  }</tbody></table>`;
+  const lr = (D.bayes||{}).lr||{};
+  const keys = Object.keys(lr);
+  if (keys.length) $('bayes').innerHTML += `<div class="note">Likelihood ratios المتعلّمة: ${keys.map(k => k+': '+Object.entries(lr[k]).map(([b,e])=>`b${b}=${e.lr}`).join(' ')).join(' | ')}</div>`;
+})();
+
+// Model
+(() => {
+  const m = D.model;
+  if (!m) { $('model').innerHTML = empty('لم يتم تدريب النموذج بعد — research.py train'); return; }
+  const oc = ((D.backtest||{}).oos_comparison)||null;
+  let h = `<div class="kv"><span>Backend</span><span>${m.backend}</span><span>تدريب</span><span>${String(m.trained_at).slice(0,16)}</span><span>صفوف</span><span>${m.rows} (نسبة النجاح ${f(m.base_rate*100,1,'%')})</span><span>AUC خارج العينة</span><span>${f(m.auc_oos,3)}</span><span>عتبة الفلترة (خام)</span><span>${m.threshold!=null?f(m.threshold,3):'—'}</span><span>Holdout E[R]</span><span>كل الصفوف ${f(m.holdout_expectancy_r_all,3)} ← فوق العتبة ${f(m.holdout_expectancy_r_filtered,3)}</span>`;
+  h += `<span>معايرة (Calibration)</span><span>${m.calibrated?'✅ معاير — تقديره بيظهر في الرسائل':'❌ غير معاير — تقديره مش بيظهر في الرسائل'}</span>`;
+  if (oc) h += `<span>Backtest OOS</span><span>قواعد فقط ${f(oc.rules_only.expectancy_r,3)}R (${oc.rules_only.trades}) ← +ML ${f(oc.rules_plus_ml.expectancy_r,3)}R (${oc.rules_plus_ml.trades})</span>`;
+  h += `</div>`;
+  const imp = m.feature_importance||{}; const mx = Math.max(...Object.values(imp), 1e-9);
+  if (Object.keys(imp).length) h += `<div style="margin-top:12px">${Object.entries(imp).slice(0,10).map(([k,v]) => `<div class="hbar"><span>${k}</span><div style="width:${(v/mx*100).toFixed(0)}%"></div></div>`).join('')}</div>`;
+  if ((m.reliability||[]).length) h += `<table style="margin-top:10px"><thead><tr><th>نطاق التقدير</th><th>عدد</th><th>المتوقع</th><th>الفعلي</th></tr></thead><tbody>${m.reliability.map(r=>`<tr><td class="num">${r.bin}</td><td class="num">${r.n}</td><td class="num">${f(r.predicted*100,0,'%')}</td><td class="num">${f(r.actual*100,0,'%')}</td></tr>`).join('')}</tbody></table>`;
+  if (m.auc_oos!=null && m.auc_oos < 0.55) h += `<div class="note">⚠️ AUC أقل من 0.55 → الماسح بيتجاهل النموذج تلقائيًا.</div>`;
+  $('model').innerHTML = h;
+})();
+
+// Backtest
+(() => {
+  const b = D.backtest;
+  if (!b) { $('bt').innerHTML = empty('شغّل research.py backtest'); return; }
+  const r = b.rules||{};
+  let h = `<div class="kv"><span>الفترة</span><span>${b.days} يوم × ${b.symbols} عملة ${b.synthetic?'<b class="down">(بيانات وهمية)</b>':''}</span><span>صفقات</span><span>${r.trades}</span><span>نسبة النجاح</span><span>${f(r.win_rate*100,1,'%')}</span><span>Expectancy</span><span>${f(r.expectancy_r,3)} R</span><span>Profit factor</span><span>${f(r.profit_factor,2)}</span><span>Max DD</span><span>${f(r.max_dd_r,2)} R</span><span>أطول خسائر متتالية</span><span>${r.max_losing_streak}</span><span>رسوم+انزلاق</span><span>${f(2*(b.fee_pct_per_side+b.slippage_pct_per_side),2,'%')} للصفقة</span></div>`;
+  const bl = r.by_lane||{};
+  if (Object.keys(bl).length) h += `<table style="margin-top:10px"><thead><tr><th>Lane</th><th>صفقات</th><th>نجاح</th><th>E[R]</th></tr></thead><tbody>${Object.entries(bl).map(([k,v])=>`<tr><td>${k}</td><td class="num">${v.trades}</td><td class="num">${f(v.win_rate*100,0,'%')}</td><td class="num">${f(v.expectancy_r,3)}</td></tr>`).join('')}</tbody></table>`;
+  h += `<div class="note">${(b.limitations||[]).map(x=>'• '+x).join('<br>')}</div>`;
+  $('bt').innerHTML = h;
+})();
+
+// Optimizer
+(() => {
+  const o = D.optimizer;
+  if (!o) { $('opt').innerHTML = empty('شغّل research.py optimize'); return; }
+  const keys = Object.keys(o.best_params||{});
+  let h = `<div class="kv"><span>القرار</span><span>${o.decision} ${o.applied?'(مطبّق)':''}</span><span>المحاولات</span><span>${o.trials}</span><span>Test E[R]</span><span>الأفضل ${f((o.best_test||{}).expectancy_r,3)} (${(o.best_test||{}).trades}) مقابل الحالي ${f((o.current_test||{}).expectancy_r,3)} (${(o.current_test||{}).trades})</span><span>F&amp;G mode</span><span>${o.best_fng_mode}</span></div>`;
+  h += `<table style="margin-top:10px"><thead><tr><th>المعامل</th><th>الحالي</th><th>الأفضل</th></tr></thead><tbody>${keys.map(k=>`<tr><td class="mono" style="direction:ltr;text-align:right">${k}</td><td class="num">${o.current_params[k]}</td><td class="num ${o.best_params[k]!=o.current_params[k]?'up':''}">${o.best_params[k]}</td></tr>`).join('')}</tbody></table>`;
+  $('opt').innerHTML = h;
+})();
+
+// Watch
+(() => {
+  const rows = D.watch||[];
+  if (!rows.length) { $('watch').innerHTML = empty('لا يوجد'); return; }
+  $('watch').innerHTML = `<table><thead><tr><th>الوقت</th><th>العملة</th><th>Setup</th><th>Score</th><th>15m</th><th>1h</th><th>Vol 15m</th><th>Accel</th><th>سيولة</th></tr></thead><tbody>${
+    rows.map(r=>`<tr><td class="num">${String(r.logged_time_utc||'').slice(0,16).replace('T',' ')}</td><td><b>${r.symbol}</b></td><td>${r.setup||''}</td><td class="num">${f(r.score,0)}</td><td class="num">${pctS(r.gain_15m)}</td><td class="num">${pctS(r.gain_1h)}</td><td class="num">${f(r.volume_15m,1)}x</td><td class="num">${f(r.acceleration,2)}x</td><td>${r.liquidity||''}</td></tr>`).join('')
+  }</tbody></table>`;
+})();
+</script>
+</body>
+</html>
