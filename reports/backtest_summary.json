@@ -1,14 +1,14 @@
 {
-  "run_at": "2026-11-07T15:05:40.423481+00:00",
+  "run_at": "2026-11-07T15:36:01.175263+00:00",
   "synthetic": false,
-  "symbols": 35,
+  "symbols": 33,
   "days": 30,
   "exit_mode": "MANAGED",
   "fee_pct_per_side": 0.1,
   "slippage_pct_per_side": 0.05,
-  "scan_records": 24514,
-  "labeled_rows": 24415,
-  "label_base_rate": 0.0861,
+  "scan_records": 23560,
+  "labeled_rows": 23466,
+  "label_base_rate": 0.0852,
   "rules": {
     "trades": 22,
     "win_rate": 0.5909,
@@ -68,8 +68,8 @@
     "اختيار العملات حسب حجم اليوم → انحياز بقاء (survivorship bias)"
   ],
   "oos_comparison": {
-    "period_from": "2026-10-19T22:19:59.999000+00:00",
-    "ml_threshold": 0.0265,
+    "period_from": "2026-10-20T03:14:59.999000+00:00",
+    "ml_threshold": 0.0953,
     "rules_only": {
       "trades": 9,
       "win_rate": 0.4444,
@@ -121,15 +121,15 @@
       }
     },
     "rules_plus_ml": {
-      "trades": 8,
-      "win_rate": 0.375,
-      "expectancy_r": -0.4352,
-      "avg_net_pct": -1.6099,
-      "profit_factor": 0.207,
-      "total_r": -3.482,
-      "max_dd_r": 3.482,
+      "trades": 7,
+      "win_rate": 0.4286,
+      "expectancy_r": -0.3696,
+      "avg_net_pct": -1.3924,
+      "profit_factor": 0.26,
+      "total_r": -2.587,
+      "max_dd_r": 2.587,
       "max_losing_streak": 2,
-      "avg_bars_held": 72.2,
+      "avg_bars_held": 68.9,
       "by_lane": {
         "EXPLOSIVE": {
           "trades": 2,
@@ -142,16 +142,16 @@
           "expectancy_r": -0.353
         },
         "STRICT": {
-          "trades": 4,
-          "win_rate": 0.25,
-          "expectancy_r": -0.75
+          "trades": 3,
+          "win_rate": 0.333,
+          "expectancy_r": -0.701
         }
       },
       "by_horizon": {
         "INTRADAY": {
-          "trades": 4,
-          "win_rate": 0.5,
-          "avg_net_pct": -1.333
+          "trades": 3,
+          "win_rate": 0.667,
+          "avg_net_pct": -0.734
         },
         "SCALPING": {
           "trades": 3,
@@ -165,8 +165,8 @@
         }
       },
       "by_outcome": {
-        "TIMEOUT": 4,
         "SL": 3,
+        "TIMEOUT": 3,
         "BE": 1
       }
     }

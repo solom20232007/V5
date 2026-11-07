@@ -1,9 +1,9 @@
 {
-  "run_at": "2026-11-07T15:06:53.846352+00:00",
+  "run_at": "2026-11-07T15:37:14.328302+00:00",
   "trials": 311,
   "train_frac": 0.7,
-  "train_records": 17146,
-  "test_records": 7012,
+  "train_records": 16489,
+  "test_records": 6754,
   "best_params": {
     "FINAL_SCORE": 80,
     "PERSISTENT_FINAL_SCORE": 70,
