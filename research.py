@@ -164,6 +164,32 @@ def step_ml_backtest(args, dataset, kl, oos):
     return s["oos_comparison"]
 
 
+def step_tp_experiment(args, dataset, kl, scales=(0.67, 1.0, 1.33)):
+    """تجربة واحدة مضبوطة: مسافة الأهداف بس (كل حاجة تانية ثابتة).
+    الحكم على آخر 30% من الفترة (test). مفيش أي تطبيق أوتوماتيك."""
+    from v5ext import trade_manager as TM
+    from v5ext.backtest_engine import metrics, simulate_signals
+    cut = float(dataset["ts"].quantile(0.7))
+    parts = {"train": dataset[dataset.ts < cut], "test": dataset[dataset.ts >= cut]}
+    keep = ["trades", "win_rate", "expectancy_r", "avg_net_pct", "profit_factor", "total_r", "max_dd_r", "by_outcome"]
+    res = {}
+    try:
+        for sc_ in scales:
+            TM.TP_SCALE = sc_
+            res[f"x{sc_}"] = {name: {k: metrics(simulate_signals(d, kl, exit_mode=args.exit_mode)).get(k) for k in keep}
+                              for name, d in parts.items()}
+            t = res[f"x{sc_}"]
+            log.info(f"TP x{sc_}: train {t['train']['trades']} trades avg {t['train']['avg_net_pct']:+.2f}% | "
+                     f"test {t['test']['trades']} trades avg {t['test']['avg_net_pct']:+.2f}% win {t['test']['win_rate']:.0%}")
+    finally:
+        TM.TP_SCALE = 1.0
+    s = json.load(open(C.BACKTEST_SUMMARY_FILE, encoding="utf-8"))
+    s["tp_experiment"] = {"note": "x1.0 = الحالي. أقل من 1 = أهداف أقرب. الحكم على test.",
+                          "test_from": pd.to_datetime(int(cut), unit="ms", utc=True).isoformat(), "results": res}
+    _json_dump(s, C.BACKTEST_SUMMARY_FILE)
+    return res
+
+
 def read_live_results():
     try:
         return pd.read_csv(C.TRACK_FILE, low_memory=False)
@@ -276,6 +302,7 @@ def main(argv=None):
         dataset, _ = step_backtest(args, kl, btc, fng)
         if dataset is None:
             return 1
+        step_tp_experiment(args, dataset, kl)
         try:
             meta, oos = step_train(args, dataset)
             step_ml_backtest(args, dataset, kl, oos)

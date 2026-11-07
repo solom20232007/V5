@@ -135,9 +135,20 @@ def classify_horizon(x):
     return "INTRADAY"
 
 
+# معامل تقريب/تبعيد الأهداف (1.0 = الافتراضي). بيستخدمه البحث في تجربة الأهداف بس.
+TP_SCALE = 1.0
+
+
 def horizon_risk(compute_risk_levels, entry, x, horizon, atr_1h=None):
     """يحسب الوقف والأهداف حسب نوع الفرصة باستخدام compute_risk_levels بتاعة الماسح."""
     name, _, _, frame, mult, mn, mx, rr = HORIZONS[horizon]
+    if rr is None and TP_SCALE != 1.0:
+        import sys
+        sc = sys.modules.get("binance_early_pump_v5")
+        if sc is not None:
+            rr = (sc.RISK_RR_TP1, sc.RISK_RR_TP2, sc.RISK_RR_TP3)
+    if rr is not None and TP_SCALE != 1.0:
+        rr = tuple(v * TP_SCALE for v in rr)
     atr = x.get("atr_pct")
     if frame == "1h":
         if not atr_1h:
