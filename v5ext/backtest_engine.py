@@ -311,8 +311,60 @@ def _burst_until_map(records, watch_score, thr):
     return blocked
 
 
+def pullback_entry(o, h, l, c, sig_bar, retrace=0.5, wait_bars=24, rr=(1.5, 3.0, 4.5),
+                   min_sl=1.5, max_sl=8.0, timeout_min=480):
+    """دخول بعد ارتداد: بدل الشراء وقت الطلوع، استنى السعر يرجع جزء من الموجة ويأكّد.
+
+    الموجة: من أقل سعر في الساعة قبل الطلوع (L) لأعلى سعر وقت الإشارة (H)، R = H − L.
+    1) استنى لحد wait_bars شمعة إن السعر يلمس H − retrace×R
+    2) لو نزل تحت H − 0.786×R → الإشارة اتلغت (الطلوع فشل)
+    3) بعد اللمس: شمعة 5 دقايق خضرا تقفل فوق أعلى سعر في الشمعة اللي قبلها = تأكيد
+    4) الدخول على افتتاح الشمعة اللي بعد التأكيد. الوقف تحت أقل سعر في الارتداد.
+    يرجّع (entry_idx, risk) أو None.
+    """
+    i = int(sig_bar)
+    if i < 16 or i + 2 >= len(c):
+        return None
+    H = float(max(h[i - 3:i + 1]))
+    L = float(min(l[i - 15:i - 2]))
+    R = H - L
+    if R <= 0 or R / H < 0.01:
+        return None
+    zone, invalid = H - retrace * R, H - 0.786 * R
+    touched, lowest = False, float("inf")
+    last = min(len(c) - 2, i + wait_bars)
+    for j in range(i + 1, last + 1):
+        if l[j] <= invalid:
+            return None
+        lowest = min(lowest, l[j])
+        if l[j] <= zone:
+            touched = True
+        if touched and c[j] > o[j] and c[j] > h[j - 1]:
+            ei = j + 1
+            entry = float(o[ei])
+            sl = lowest * (1 - 0.002)
+            sl_pct = (entry - sl) / entry * 100.0
+            if sl_pct < min_sl:
+                sl, sl_pct = entry * (1 - min_sl / 100.0), min_sl
+            if sl_pct > max_sl or sl_pct <= 0:
+                return None
+            risk_abs = entry - sl
+            tps = [entry + risk_abs * k for k in rr]
+            return ei, {
+                "entry": entry, "sl": sl, "sl_pct": sl_pct,
+                "tp1": tps[0], "tp1_pct": (tps[0] / entry - 1) * 100, "tp1_rr": rr[0],
+                "tp2": tps[1], "tp2_pct": (tps[1] / entry - 1) * 100, "tp2_rr": rr[1],
+                "tp3": tps[2], "tp3_pct": (tps[2] / entry - 1) * 100, "tp3_rr": rr[2],
+                "timeout_min": timeout_min,
+            }
+    return None
+
+
 def simulate_signals(records, klines, params=None, exit_mode="MANAGED", ml_probs=None,
-                     ml_min_prob=None, fng_mode=None, burst=None, spacing_min=0):
+                     ml_min_prob=None, fng_mode=None, burst=None, spacing_min=0,
+                     entry_mode="NOW", pullback=None, relaxed_trigger=False):
+    """entry_mode: NOW = الدخول فورًا (الماسح الحالي) | PULLBACK = بعد ارتداد (pullback = kwargs).
+    relaxed_trigger: يتجاهل final_candidate_eligible (فلاتر FINAL) — الارتداد هو الفلتر."""
     """burst: None = بدون فلتر، أو dict عتبات من burst_thresholds (محسوبة على فترة train).
     spacing_min: أقل مدة بين أي إشارتين (على مستوى المحفظة)."""
     """records: DataFrame من scan_history. params: overrides لعتبات الماسح.
@@ -351,7 +403,7 @@ def simulate_signals(records, klines, params=None, exit_mode="MANAGED", ml_probs
                 if isinstance(xx.get(k), float) and math.isnan(xx[k]):
                     xx[k] = None
             xx["score"] = x["score"] - extra
-            if not sc.final_candidate_eligible(xx):
+            if not relaxed_trigger and not sc.final_candidate_eligible(xx):
                 continue
             # == maybe_final_signal ==
             if sym in last_final and ts - last_final[sym] < cooldown:
@@ -392,17 +444,27 @@ def simulate_signals(records, klines, params=None, exit_mode="MANAGED", ml_probs
             ei = int(x["bar"]) + 1
             if ei >= len(o):
                 continue
-            entry = o[ei]
             from .trade_manager import HORIZONS, atr_1h_from_5m, classify_horizon, horizon_risk
-            hz = classify_horizon(dict(xx, lane=lane))
-            a1h = atr_1h_from_5m(h, l, cl, ei - 1) if hz == "SWING" else None
-            risk = horizon_risk(sc.compute_risk_levels, entry, xx, hz, a1h)
-            if risk is None:
-                hz = "INTRADAY"
-                risk = horizon_risk(sc.compute_risk_levels, entry, xx, hz)
-            if not risk:
-                continue
-            timeout_min = HORIZONS[hz][2]
+            if entry_mode == "PULLBACK":
+                pb = pullback_entry(o, h, l, cl, int(x["bar"]), **(pullback or {}))
+                # المرشح استُهلك سواء اتدخل ولا اتلغى (مرشح واحد ليه نتيجة واحدة)
+                cand.pop(sym, None)
+                if pb is None:
+                    last_final[sym] = ts
+                    continue
+                ei, risk = pb
+                entry, hz, timeout_min = risk["entry"], "PULLBACK", risk["timeout_min"]
+            else:
+                entry = o[ei]
+                hz = classify_horizon(dict(xx, lane=lane))
+                a1h = atr_1h_from_5m(h, l, cl, ei - 1) if hz == "SWING" else None
+                risk = horizon_risk(sc.compute_risk_levels, entry, xx, hz, a1h)
+                if risk is None:
+                    hz = "INTRADAY"
+                    risk = horizon_risk(sc.compute_risk_levels, entry, xx, hz)
+                if not risk:
+                    continue
+                timeout_min = HORIZONS[hz][2]
             if exit_mode == "MANAGED":
                 ex = simulate_managed(o, h, l, cl, ei, risk, timeout_min)
                 if ex is None:

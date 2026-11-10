@@ -212,6 +212,57 @@ def step_burst_experiment(args, dataset, kl):
     return res
 
 
+def step_pullback_experiment(args, dataset, kl):
+    """الدخول بعد ارتداد مقابل الدخول الفوري. نفس المحفّزات، نفس إدارة الصفقة، نفس الرسوم.
+    الاختيار على train (20 صفقة على الأقل)، والحكم على test. مفيش تطبيق أوتوماتيك."""
+    from v5ext.backtest_engine import metrics, simulate_signals
+    cut = float(dataset["ts"].quantile(0.7))
+    parts = {"train": dataset[dataset.ts < cut], "test": dataset[dataset.ts >= cut]}
+    keep = ["trades", "win_rate", "expectancy_r", "avg_net_pct", "profit_factor", "total_r",
+            "max_dd_r", "max_losing_streak", "by_outcome"]
+    base_name = "now (current)"
+    variants = {
+        base_name: dict(entry_mode="NOW"),
+        "pullback 38%/2h": dict(entry_mode="PULLBACK", pullback=dict(retrace=0.382, wait_bars=24)),
+        "pullback 50%/2h": dict(entry_mode="PULLBACK", pullback=dict(retrace=0.5, wait_bars=24)),
+        "pullback 50%/4h": dict(entry_mode="PULLBACK", pullback=dict(retrace=0.5, wait_bars=48)),
+        "pullback 50%/2h relaxed": dict(entry_mode="PULLBACK", pullback=dict(retrace=0.5, wait_bars=24),
+                                        relaxed_trigger=True),
+    }
+    res = {}
+    for name, kw in variants.items():
+        res[name] = {}
+        for p, d in parts.items():
+            t = simulate_signals(d, kl, exit_mode=args.exit_mode, **kw)
+            res[name][p] = {k: metrics(t).get(k) for k in keep}
+        tr, te = res[name]["train"], res[name]["test"]
+        log.info(f"Entry {name:24}: train {tr['trades']:3} avg {tr['avg_net_pct']:+.2f}% | "
+                 f"test {te['trades']:3} avg {te['avg_net_pct']:+.2f}% win {te['win_rate']:.0%} PF {te['profit_factor']}")
+    pick = [n for n in variants if n != base_name and res[n]["train"]["trades"] >= 20]
+    best = max(pick, key=lambda n: res[n]["train"]["avg_net_pct"]) if pick else None
+    verdict = None
+    if best:
+        te, base = res[best]["test"], res[base_name]["test"]
+        verdict = {
+            "chosen_on_train": best,
+            "test_trades": te["trades"], "test_avg_net_pct": te["avg_net_pct"],
+            "test_profit_factor": te["profit_factor"],
+            "baseline_test_avg_net_pct": base["avg_net_pct"],
+            "passes": bool(te["trades"] >= 20 and te["avg_net_pct"] > 0 and (te["profit_factor"] or 0) > 1.1
+                           and te["avg_net_pct"] > base["avg_net_pct"]),
+            "rule": "PASS = test >= 20 trades, avg > 0, PF > 1.1, and better than current entry",
+        }
+        log.info(f"Pullback verdict: {best} -> test avg {te['avg_net_pct']:+.2f}% ({te['trades']} trades) "
+                 f"vs now {base['avg_net_pct']:+.2f}% -> {'PASS' if verdict['passes'] else 'FAIL'}")
+    else:
+        log.info("Pullback verdict: no variant reached 20 train trades -> FAIL")
+    s = json.load(open(C.BACKTEST_SUMMARY_FILE, encoding="utf-8"))
+    s["pullback_experiment"] = {"results": res, "verdict": verdict,
+                                "test_from": pd.to_datetime(int(cut), unit="ms", utc=True).isoformat()}
+    _json_dump(s, C.BACKTEST_SUMMARY_FILE)
+    return res
+
+
 def read_live_results():
     try:
         return pd.read_csv(C.TRACK_FILE, low_memory=False)
@@ -326,6 +377,7 @@ def main(argv=None):
             return 1
         step_tp_experiment(args, dataset, kl)
         step_burst_experiment(args, dataset, kl)
+        step_pullback_experiment(args, dataset, kl)
         try:
             meta, oos = step_train(args, dataset)
             step_ml_backtest(args, dataset, kl, oos)
