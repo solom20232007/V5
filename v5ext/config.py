@@ -101,6 +101,11 @@ BT_TIMEOUT_BARS = _env_int("BT_TIMEOUT_BARS", 48)    # 48 × 5m = 4 ساعات (
 BT_WARMUP_BARS = 289                                 # 24 ساعة + شمعة لحساب تغير 24h
 BT_LABEL_MIN_SCORE = _env_int("BT_LABEL_MIN_SCORE", 55)  # يسجّل dataset للـ ML من score كده وفوق
 
+# ---------- Paper mode ----------
+# الـ backtest (90 يوم، 87 إشارة) طلع خسارة: −0.36% للصفقة بعد الرسوم.
+# لحد ما استراتيجية تثبت ربح على فترة اختبار: الإشارات للمتابعة والتسجيل بس.
+PAPER_MODE = _env_bool("PAPER_MODE", True)
+
 # ---------- Market burst / correlated signals ----------
 # اندفاعة سوق عامة = عدد العملات اللي عدّت WATCH في نفس الدورة في أعلى BURST_QUANTILE من التاريخ
 BURST_FILTER = _env_bool("BURST_FILTER", True)

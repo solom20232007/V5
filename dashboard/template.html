@@ -106,6 +106,7 @@ const pctS = (v,d=2) => (v===null||v===undefined||Number.isNaN(+v)) ? '—' : `<
 const empty = t => `<div class="empty">${t}</div>`;
 
 $('gen').textContent = 'آخر تحديث: ' + (D.generated||'');
+if (D.paper) $('gen').innerHTML += ' &nbsp;<span class="pill p-TIMEOUT">🧪 وضع تجريبي — الإشارات للمتابعة فقط، مش توصيات شراء</span>';
 
 // F&G
 (() => {

@@ -90,6 +90,7 @@ def collect():
     return {
         "generated": pd.Timestamp.now("UTC").strftime("%Y-%m-%d %H:%M UTC"),
         "kpi": kpi,
+        "paper": bool(C.PAPER_MODE),
         "pnl": tables,
         "fng": fng.get("current") or {},
         "fng_history": fng_hist,

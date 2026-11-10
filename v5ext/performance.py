@@ -148,13 +148,13 @@ def build_report(df, kind, now_utc=None, tag="🤖 [V5.1]"):
     still_open = int((df.get("trade_status", pd.Series(dtype=object)).astype(str) == "OPEN").sum()) \
         if df is not None and len(df) else 0
     icon = {"daily": "📅", "weekly": "🗓", "monthly": "📆"}[kind]
-    lines = [f"{tag} {icon} {label}", ""]
+    lines = [f"{tag} {icon} {label}" + (" — 🧪 إشارات تجريبية" if C.PAPER_MODE else ""), ""]
     lines.append(f"إشارات جديدة: {opened} | صفقات اتقفلت: {s['trades']} | لسه مفتوحة الآن: {still_open}")
     if s["trades"]:
         lines.append(f"✅ ناجحة: {s['wins']} | ❌ خاسرة: {s['losses']} | نسبة النجاح: {s['win_rate'] * 100:.0f}%")
         sign = "🟢 ربح" if s["total_pct"] > 0 else ("🔴 خسارة" if s["total_pct"] < 0 else "⚪ تعادل")
         lines.append(f"{sign} صافي: {s['total_pct']:+.2f}%  (متوسط الصفقة {s['avg_pct']:+.2f}%)")
-        lines.append(f"💵 لو دخلت بـ {STAKE_USD:.0f}$ في كل إشارة: {s['usd']:+.2f}$")
+        lines.append(f"💵 لو كان حد دخل بـ {STAKE_USD:.0f}$ في كل إشارة: {s['usd']:+.2f}$")
         lines.append(f"أفضل صفقة: {s['best']:+.2f}% | أسوأ صفقة: {s['worst']:+.2f}%")
         if kind != "daily":
             by = t.groupby(t["horizon"].fillna("-").astype(str))["pnl_pct"].agg(["count", "sum"])

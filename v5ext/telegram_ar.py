@@ -7,7 +7,11 @@
 """
 from datetime import datetime
 
+from . import config as C
 from .trade_manager import HORIZONS, classify_horizon
+
+PAPER_HEADER = ("🧪 إشارة تجريبية — للمتابعة فقط، مش توصية شراء\n"
+                "(الاختبار على آخر 90 يوم طلع خسارة، فالبوت بيسجّل الإشارات لحد ما يثبت إنه بيكسب)")
 
 LANE_AR = {
     "STRICT": "صارم (Strict)",
@@ -149,9 +153,12 @@ def format_final_ar(x, confirmations, cross_label=None, cross_detail=None, tag="
     x.setdefault("timeout_min", hz_timeout)
     r = x.get("risk") or {}
 
-    lines = [f"{tag} 🔥 فرصة صعود مبكر — {x['symbol']}", ""]
+    if C.PAPER_MODE:
+        lines = [f"{tag} 🧪 {x['symbol']} — صعود مبكر (متابعة)", PAPER_HEADER, ""]
+    else:
+        lines = [f"{tag} 🔥 فرصة صعود مبكر — {x['symbol']}", ""]
     lines.append(f"⏱ نوع الفرصة: {hz_name}")
-    lines.append(f"⌛ مدة المتابعة: {hz_time} (البوت هيتابع ويبعتلك تنبيه بأي جديد)")
+    lines.append(f"⌛ مدة المتابعة: {hz_time} (البوت هيتابع ويبعتلك النتيجة)")
     lines.append(f"🛤 المسار (Lane): {LANE_AR.get(x.get('lane'), x.get('lane') or '-')} | درجة الإشارة (Score): {x.get('score')}/100")
     lines += _track_record(x)
     ml = _model_line(x)
@@ -161,7 +168,7 @@ def format_final_ar(x, confirmations, cross_label=None, cross_detail=None, tag="
 
     if r:
         lines += [
-            "━━━ 💰 خطة الصفقة ━━━",
+            "━━━ 📐 المستويات اللي البوت هيقيس عليها ━━━" if C.PAPER_MODE else "━━━ 💰 خطة الصفقة ━━━",
             f"سعر الدخول (Entry): {_p(r['entry'])}",
             f"وقف الخسارة (Stop Loss): {_p(r['sl'])}  ({-r['sl_pct']:+.2f}%)",
             f"الهدف الأول (TP1): {_p(r['tp1'])}  ({r['tp1_pct']:+.2f}%)",
@@ -169,13 +176,16 @@ def format_final_ar(x, confirmations, cross_label=None, cross_detail=None, tag="
         ]
         if r.get("tp3"):
             lines.append(f"الهدف الثالث (TP3): {_p(r['tp3'])}  ({r['tp3_pct']:+.2f}%)")
-        lines += [
-            "• عند TP1: بيع ثلث الكمية وحرّك الوقف لسعر الدخول",
-            "• عند TP2: بيع ثلث تاني وحرّك الوقف لـ TP1",
-            "• عند TP3: بيع الباقي",
-        ]
-        for n in r.get("notes", []):
-            lines.append(f"• {n}")
+        if C.PAPER_MODE:
+            lines.append("• البوت بيحسب النتيجة كأن ثلث اتقفل عند كل هدف والوقف اتحرك")
+        else:
+            lines += [
+                "• عند TP1: بيع ثلث الكمية وحرّك الوقف لسعر الدخول",
+                "• عند TP2: بيع ثلث تاني وحرّك الوقف لـ TP1",
+                "• عند TP3: بيع الباقي",
+            ]
+            for n in r.get("notes", []):
+                lines.append(f"• {n}")
         lines.append("")
 
     lines.append("━━━ 🔎 سبب ظهور الإشارة ━━━")
@@ -199,7 +209,10 @@ def format_final_ar(x, confirmations, cross_label=None, cross_detail=None, tag="
     if warn:
         lines += ["", "━━━ ⚠️ تحذيرات ━━━"] + [f"• {t}" for t in warn]
 
-    lines += ["", "⚠️ إشارة تحليلية وليست توصية شراء. لا تخاطر بأكثر من 1-2% من رأس مالك في الصفقة."]
+    if C.PAPER_MODE:
+        lines += ["", "🧪 للمتابعة والتسجيل فقط — مش توصية شراء."]
+    else:
+        lines += ["", "⚠️ إشارة تحليلية وليست توصية شراء. لا تخاطر بأكثر من 1-2% من رأس مالك في الصفقة."]
     return "\n".join(lines)
 
 
@@ -266,4 +279,21 @@ def format_trade_alert(track, alert, tag="🤖 [V5.1]"):
                 f"👈 يُفضّل قفل الباقي بسعر السوق")
     else:
         body = f"{sym}: {ev} @ {_p(price)}"
+    if C.PAPER_MODE:
+        body = _paper_body(ev, sym, price, move, st, track, hz_time)
+        return f"{tag} 🧪 {body}{late}{net_line}"
     return f"{tag} {body}{late}{net_line}"
+
+
+def _paper_body(ev, sym, price, move, st, track, hz_time):
+    """نفس الأحداث بصيغة متابعة (من غير أوامر بيع/شراء)."""
+    return {
+        "TP1": f"{sym}: وصل الهدف الأول (TP1) عند {_p(price)} ({move:+.2f}%) — متابعة تجريبية",
+        "TP2": f"{sym}: وصل الهدف الثاني (TP2) عند {_p(price)} ({move:+.2f}%) — متابعة تجريبية",
+        "TP3": f"{sym}: وصل الهدف الثالث (TP3) عند {_p(price)} ({move:+.2f}%) — الإشارة اتقفلت",
+        "WARN": f"{sym}: الإشارة بتفشل — السعر {_p(price)} ({move:+.2f}%) قطع نص المسافة للوقف",
+        "SL": f"{sym}: ضربت وقف الخسارة عند {_p(price)} ({move:+.2f}%) — الإشارة اتقفلت",
+        "BE": f"{sym}: رجعت لسعر الدخول بعد الهدف الأول — الإشارة اتقفلت",
+        "LOCK_TP1": f"{sym}: رجعت للهدف الأول بعد الهدف الثاني — الإشارة اتقفلت",
+        "TIMEOUT": f"{sym}: انتهت مدة المتابعة ({hz_time}) والسعر {_p(price)} ({move:+.2f}%)",
+    }.get(ev, f"{sym}: {ev} @ {_p(price)}")
