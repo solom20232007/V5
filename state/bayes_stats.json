@@ -1,15 +1,15 @@
 {
- "updated": "2026-11-10T16:00:37.522342+00:00",
+ "updated": "2026-11-10T16:30:39.923916+00:00",
  "lanes": {
   "ALL": {
    "alpha": 11.0,
-   "beta": 11.0,
-   "mean": 0.5,
-   "lower_80": 0.3664,
+   "beta": 12.0,
+   "mean": 0.4783,
+   "lower_80": 0.3476,
    "bt_wins": 9,
    "bt_losses": 8,
    "live_wins": 1,
-   "live_losses": 2
+   "live_losses": 3
   },
   "EXPLOSIVE": {
    "alpha": 2.0,
@@ -33,15 +33,33 @@
   },
   "STRICT": {
    "alpha": 7.0,
-   "beta": 6.0,
-   "mean": 0.5385,
-   "lower_80": 0.3677,
+   "beta": 7.0,
+   "mean": 0.5,
+   "lower_80": 0.3345,
    "bt_wins": 6,
    "bt_losses": 4,
    "live_wins": 0,
-   "live_losses": 1
+   "live_losses": 2
   }
  },
- "lr": {},
+ "lr": {
+  "fng": {
+   "1": {
+    "lr": 0.8551,
+    "n": 5,
+    "wins": 1
+   },
+   "2": {
+    "lr": 0.9652,
+    "n": 3,
+    "wins": 1
+   },
+   "3": {
+    "lr": 1.1711,
+    "n": 12,
+    "wins": 7
+   }
+  }
+ },
  "cost_pct": 0.30000000000000004
 }
