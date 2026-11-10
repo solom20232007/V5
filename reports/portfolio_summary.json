@@ -6,19 +6,21 @@
     "max_positions": 5,
     "compounding": true
   },
-  "signals": 17,
-  "taken": 16,
-  "skipped_max_positions": 1,
-  "final_equity": 990.2,
-  "return_pct": -0.98,
-  "max_drawdown_pct": 3.41,
-  "win_rate": 0.5,
-  "profit_factor": 0.82,
-  "avg_pnl": -0.612,
-  "best_trade": 12.83,
-  "worst_trade": -10.71,
+  "signals": 87,
+  "taken": 79,
+  "skipped_max_positions": 8,
+  "final_equity": 934.78,
+  "return_pct": -6.52,
+  "max_drawdown_pct": 8.9,
+  "win_rate": 0.4557,
+  "profit_factor": 0.8,
+  "avg_pnl": -0.826,
+  "best_trade": 23.49,
+  "worst_trade": -10.88,
   "monthly_pnl": {
-    "2026-10": -0.67,
-    "2026-11": -9.13
+    "2026-08": -43.19,
+    "2026-09": 55.87,
+    "2026-10": -29.41,
+    "2026-11": -48.49
   }
 }
