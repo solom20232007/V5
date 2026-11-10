@@ -190,6 +190,28 @@ def step_tp_experiment(args, dataset, kl, scales=(0.67, 1.0, 1.33)):
     return res
 
 
+def step_burst_experiment(args, dataset, kl):
+    """هل فلتر اندفاعة السوق وتباعد الإشارات بيحسّنوا النتيجة؟ العتبات من train، الحكم على test."""
+    from v5ext.backtest_engine import burst_thresholds, get_scanner, metrics, simulate_signals
+    sc = get_scanner()
+    cut = float(dataset["ts"].quantile(0.7))
+    parts = {"train": dataset[dataset.ts < cut], "test": dataset[dataset.ts >= cut]}
+    thr = burst_thresholds(parts["train"], sc.WATCH_SCORE)
+    keep = ["trades", "win_rate", "expectancy_r", "avg_net_pct", "profit_factor", "total_r", "max_dd_r", "max_losing_streak"]
+    variants = {"none": (None, 0), "spacing_60m": (None, 60), "burst": (thr, 0), "burst+spacing": (thr, 60)}
+    res = {}
+    for name, (b, sp) in variants.items():
+        res[name] = {p: {k: metrics(simulate_signals(d, kl, exit_mode=args.exit_mode, burst=b, spacing_min=sp)).get(k)
+                         for k in keep} for p, d in parts.items()}
+        t = res[name]["test"]
+        log.info(f"Filter {name:14}: test {t['trades']} trades | win {t['win_rate']:.0%} | avg {t['avg_net_pct']:+.2f}% | "
+                 f"maxDD {t['max_dd_r']}R | streak {t['max_losing_streak']}")
+    s = json.load(open(C.BACKTEST_SUMMARY_FILE, encoding="utf-8"))
+    s["burst_experiment"] = {"thresholds_from_train": thr, "symbols": len(kl), "results": res}
+    _json_dump(s, C.BACKTEST_SUMMARY_FILE)
+    return res
+
+
 def read_live_results():
     try:
         return pd.read_csv(C.TRACK_FILE, low_memory=False)
@@ -303,6 +325,7 @@ def main(argv=None):
         if dataset is None:
             return 1
         step_tp_experiment(args, dataset, kl)
+        step_burst_experiment(args, dataset, kl)
         try:
             meta, oos = step_train(args, dataset)
             step_ml_backtest(args, dataset, kl, oos)

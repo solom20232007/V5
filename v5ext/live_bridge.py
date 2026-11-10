@@ -161,3 +161,42 @@ def load_optimized(globals_dict, allowed, logger=None):
         if logger:
             logger.warning(f"optimized thresholds load failed: {e}")
     return applied
+
+
+# ------------------------------------------------------------------
+# اندفاعة السوق + تباعد الإشارات
+# ------------------------------------------------------------------
+def update_breadth(meta, watch_count, now_ts):
+    """يتنادى مرة كل دورة بعدد العملات اللي عدّت WATCH. يرجّع dict بالحالة."""
+    hist = list(meta.get("breadth_hist") or [])
+    prev = hist[-2:]
+    hist.append(int(watch_count))
+    hist = hist[-3000:]
+    meta["breadth_hist"] = hist
+    import numpy as np
+    base = hist[:-1]
+    thr1 = C.BURST_MIN_COUNT
+    thr3 = int(C.BURST_MIN_COUNT * 1.7)
+    if len(base) >= 200:
+        thr1 = max(thr1, int(np.ceil(np.quantile(base, C.BURST_QUANTILE))))
+        sums = [sum(base[i:i + 3]) for i in range(len(base) - 2)]
+        thr3 = max(thr3, int(np.ceil(np.quantile(sums, C.BURST_QUANTILE))))
+    roll3 = int(watch_count) + sum(prev)
+    burst = bool(C.BURST_FILTER and (watch_count >= thr1 or roll3 >= thr3))
+    if burst:
+        meta["burst_until"] = max(float(meta.get("burst_until") or 0), now_ts + C.BURST_BLOCK_MIN * 60)
+    return {"count": int(watch_count), "roll3": roll3, "thr1": thr1, "thr3": thr3, "burst": burst,
+            "burst_until": meta.get("burst_until")}
+
+
+def portfolio_gate(meta, active_tracks, now_ts):
+    """(ok, reason) — قبل أي إشارة FINAL."""
+    if C.BURST_FILTER and now_ts < float(meta.get("burst_until") or 0):
+        left = (float(meta["burst_until"]) - now_ts) / 60
+        return False, f"MARKET_BURST ({left:.0f}m left)"
+    if C.SIGNAL_SPACING_MIN > 0:
+        last = max([float(t.get("start_ts") or 0) for t in (active_tracks or {}).values()] +
+                   [float(meta.get("last_final_ts") or 0)])
+        if now_ts - last < C.SIGNAL_SPACING_MIN * 60:
+            return False, f"SIGNAL_SPACING ({(now_ts - last) / 60:.0f}m < {C.SIGNAL_SPACING_MIN}m)"
+    return True, "OK"

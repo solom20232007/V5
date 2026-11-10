@@ -65,9 +65,10 @@ OI_POINTS = 13                             # 13 نقطة × 5m = ساعة
 
 # ---------- 3) Whale Transactions ----------
 WHALE_ENABLED = _env_bool("WHALE_ENABLED", True)
-WHALE_MIN_USD = _env_float("WHALE_MIN_USD", 10_000)
-WHALE_MAX_USD = _env_float("WHALE_MAX_USD", 250_000)
-WHALE_QV_FRACTION = _env_float("WHALE_QV_FRACTION", 0.002)  # 0.2% من حجم 24h
+WHALE_MIN_USD = _env_float("WHALE_MIN_USD", 5_000)
+WHALE_MAX_USD = _env_float("WHALE_MAX_USD", 50_000)
+# آخر 1000 صفقة بتغطي دقايق بس في العملات الكبيرة → الحد القديم (0.2% من حجم اليوم، لحد 250k$) كان دايمًا بيطلع صفر
+WHALE_QV_FRACTION = _env_float("WHALE_QV_FRACTION", 0.0003)
 WHALE_WINDOW_MIN = _env_int("WHALE_WINDOW_MIN", 15)
 
 MICRO_CACHE_TTL = _env_int("MICRO_CACHE_TTL", 240)
@@ -99,3 +100,11 @@ BT_SLIPPAGE_PCT = _env_float("BT_SLIPPAGE_PCT", 0.05)
 BT_TIMEOUT_BARS = _env_int("BT_TIMEOUT_BARS", 48)    # 48 × 5m = 4 ساعات (زي TRADE_TIMEOUT_MIN)
 BT_WARMUP_BARS = 289                                 # 24 ساعة + شمعة لحساب تغير 24h
 BT_LABEL_MIN_SCORE = _env_int("BT_LABEL_MIN_SCORE", 55)  # يسجّل dataset للـ ML من score كده وفوق
+
+# ---------- Market burst / correlated signals ----------
+# اندفاعة سوق عامة = عدد العملات اللي عدّت WATCH في نفس الدورة في أعلى BURST_QUANTILE من التاريخ
+BURST_FILTER = _env_bool("BURST_FILTER", True)
+BURST_QUANTILE = _env_float("BURST_QUANTILE", 0.97)
+BURST_MIN_COUNT = _env_int("BURST_MIN_COUNT", 6)        # حد أدنى ثابت لحد ما يتجمع تاريخ كفاية
+BURST_BLOCK_MIN = _env_int("BURST_BLOCK_MIN", 30)
+SIGNAL_SPACING_MIN = _env_int("SIGNAL_SPACING_MIN", 60) # إشارة جديدة واحدة بس كل 60 دقيقة (0 = بدون)

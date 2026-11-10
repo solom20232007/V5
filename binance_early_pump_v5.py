@@ -2387,6 +2387,14 @@ def maybe_final_signal(x, now):
     if open_track and not (open_track.get("mgmt") or {}).get("closed"):
         return False
 
+    # اندفاعة سوق عامة / إشارة تانية خلال ساعة → لا (الإشارات اللي بتطلع مع بعض بتخسر مع بعض)
+    if v5x is not None:
+        ok, why = v5x.portfolio_gate(meta, active_tracks, time.time())
+        if not ok:
+            if x.get("score", 0) >= MIN_CANDIDATE_SCORE:
+                log.info(f"[V5.1] {sym}: FINAL held ({why})")
+            return False
+
     if sym in final_cooldown:
         if now - final_cooldown[sym] < FINAL_COOLDOWN_HOURS * 3600:
             return False
@@ -2501,6 +2509,7 @@ def maybe_final_signal(x, now):
 
     msg = format_final(final_x, c["count"], cross_label, cross_detail)
     telegram_send(msg)
+    meta["last_final_ts"] = time.time()
     log.info(f"\n{'!'*70}\n{msg}\n{'!'*70}")
 
     start_final_tracking(final_x)
@@ -2667,6 +2676,13 @@ def run_cycle(symbols):
 
     append_scan_diagnostics(diagnostics)
     results.sort(key=lambda x: (x["score"], x["volume_1h"]), reverse=True)
+    if v5x is not None:
+        try:
+            b = v5x.update_breadth(meta, len(results), time.time())
+            log.info(f"[V5.1] Breadth: {b['count']} watch (3-cycle {b['roll3']}) | burst thr {b['thr1']}/{b['thr3']}"
+                     + (" → 🚫 MARKET BURST: FINAL signals paused" if b["burst"] else ""))
+        except Exception as exc:  # noqa: BLE001
+            log.debug(f"breadth failed: {exc}")
 
     now = time.time()
     log.info("=" * 70)

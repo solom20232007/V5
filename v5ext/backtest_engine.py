@@ -282,8 +282,39 @@ def label_records(records, klines, risk_overrides=None):
 # ==================================================================
 # Stage B: simulate FINAL signals
 # ==================================================================
+def burst_thresholds(records, watch_score, quantile=None):
+    """عتبات اندفاعة السوق من توزيع عدد العملات فوق WATCH في كل شمعة (الشموع الفاضية = 0)."""
+    quantile = C.BURST_QUANTILE if quantile is None else quantile
+    if records is None or not len(records):
+        return None
+    ts0, ts1 = int(records.ts.min()), int(records.ts.max())
+    grid = pd.Series(0, index=np.arange(ts0 // 300_000, ts1 // 300_000 + 1))
+    cnt = records[records.score >= watch_score].groupby(records.ts // 300_000).size()
+    grid.loc[cnt.index] = cnt.values
+    roll = grid.rolling(3, min_periods=1).sum()
+    return {"thr1": max(2, int(np.ceil(grid.quantile(quantile)))),
+            "thr3": max(3, int(np.ceil(roll.quantile(quantile))))}
+
+
+def _burst_until_map(records, watch_score, thr):
+    """{bar_index: blocked_until_ms}"""
+    cnt = records[records.score >= watch_score].groupby(records.ts // 300_000).size()
+    if not len(cnt):
+        return set()
+    full = cnt.reindex(np.arange(cnt.index.min(), cnt.index.max() + 1), fill_value=0)
+    roll = full.rolling(3, min_periods=1).sum()
+    hits = full.index[(full >= thr["thr1"]) | (roll >= thr["thr3"])]
+    blocked = set()
+    span = C.BURST_BLOCK_MIN // 5
+    for b in hits:
+        blocked.update(range(int(b), int(b) + span + 1))
+    return blocked
+
+
 def simulate_signals(records, klines, params=None, exit_mode="MANAGED", ml_probs=None,
-                     ml_min_prob=None, fng_mode=None):
+                     ml_min_prob=None, fng_mode=None, burst=None, spacing_min=0):
+    """burst: None = بدون فلتر، أو dict عتبات من burst_thresholds (محسوبة على فترة train).
+    spacing_min: أقل مدة بين أي إشارتين (على مستوى المحفظة)."""
     """records: DataFrame من scan_history. params: overrides لعتبات الماسح.
 
     ml_probs: Series/dict {(symbol, ts): prob} — احتمالات out-of-sample بس.
@@ -303,6 +334,8 @@ def simulate_signals(records, klines, params=None, exit_mode="MANAGED", ml_probs
         cooldown = sc.FINAL_COOLDOWN_HOURS * 3_600_000
         cand, last_final = {}, {}
         busy_until = {}
+        blocked = _burst_until_map(records, sc.WATCH_SCORE, burst) if burst else set()
+        last_any = -10 ** 15
         for x in recs:
             sym, ts = x["symbol"], int(x["ts"])
             if not x.get("btc_safe", True):
@@ -326,6 +359,10 @@ def simulate_signals(records, klines, params=None, exit_mode="MANAGED", ml_probs
             if ts < busy_until.get(sym, 0):
                 continue
             if xx["score"] < sc.MIN_CANDIDATE_SCORE:
+                continue
+            if blocked and ts // 300_000 in blocked:
+                continue
+            if spacing_min and ts - last_any < spacing_min * 60_000:
                 continue
             c = cand.get(sym)
             if not c or ts - c["last_ts"] > expiry:
@@ -374,6 +411,7 @@ def simulate_signals(records, klines, params=None, exit_mode="MANAGED", ml_probs
                 ex = simulate_exit(o, h, l, cl, ei, entry, risk["sl"], risk["tp1"], risk["tp2"],
                                    timeout_bars=timeout_min // 5, mode=exit_mode)
             last_final[sym] = ts
+            last_any = ts
             cand.pop(sym, None)
             exit_ts = int(ot[min(ei + ex["bars_held"] - 1, len(ot) - 1)]) + 300_000
             busy_until[sym] = exit_ts
