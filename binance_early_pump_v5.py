@@ -2598,6 +2598,14 @@ def run_cycle(symbols):
                 log.info(f"P&L reports sent: {sent}")
         except Exception as exc:  # noqa: BLE001
             log.warning(f"P&L report failed: {exc}")
+        # اختبار الاتجاه اليومي على الورق (مرة في اليوم بعد قفل الشمعة اليومية)
+        try:
+            from v5ext import trend_live
+            done = trend_live.maybe_run(sys.modules[__name__], telegram_send, tag=PROGRAM_TAG)
+            if done:
+                log.info(f"[TREND] daily paper run: {len(done)} message(s)")
+        except Exception as exc:  # noqa: BLE001
+            log.warning(f"[TREND] daily paper run failed (will retry next cycle): {exc}")
 
     btc_safe, btc_15m, btc_1h = check_btc_market_health()
     if not btc_safe:

@@ -326,6 +326,52 @@ def step_trend(args):
     return rep
 
 
+def step_fast(args):
+    """اختبار السرعة على شموع الدقيقة (fast_days يوم)."""
+    from v5ext import fast_impulse as FI
+    if args.synthetic:
+        from v5ext import synthetic
+        kl = {}
+        for i in range(args.top):
+            d = synthetic.make_klines(f"F{i}USDT", days=args.fast_days * 5 / 5, seed=i, pumps_per_day=8)
+            d["open_time"] = d.open_time.iloc[0] + (d.index.to_numpy() * 60_000)
+            d["close_time"] = d.open_time + 59_999
+            kl[f"F{i}USDT"] = d
+        btc = None
+    else:
+        from v5ext.binance_data import load_klines
+        syms = resolve_universe(args)
+        now_ms = int(time.time() * 1000)
+        kl = {}
+        for k, s in enumerate(syms, 1):
+            try:
+                df = load_klines(s, "1m", args.fast_days, now_ms)
+                if len(df) > 2000:
+                    kl[s] = df
+                log.info(f"[{k}/{len(syms)}] {s}: {len(df)} 1m bars")
+            except Exception as e:  # noqa: BLE001
+                log.warning(f"{s}: 1m klines failed: {e}")
+        btc = load_klines("BTCUSDT", "1m", args.fast_days, now_ms)
+    log.info(f"Fast impulse: {len(kl)} symbols, {args.fast_days} days of 1m candles")
+    rep, all_t = FI.experiment(kl, btc)
+    for name, v in rep["results"].items():
+        tr, te = v["train"], v["test"]
+        log.info(f"Fast {name:15}: train {tr['trades']:4} avg {tr['avg_net_pct']:+.2f}% | test {te['trades']:4} "
+                 f"avg {te['avg_net_pct']:+.2f}% PF {te.get('profit_factor')} | w/o top3 {te.get('avg_without_top3')}")
+    v = rep.get("verdict")
+    if v:
+        log.info(f"Fast verdict: {v['chosen_on_train']} -> test avg {v['test_avg_net_pct']:+.2f}% "
+                 f"({v['test_trades']} trades) -> {'PASS' if v['passes'] else 'FAIL'}")
+    else:
+        log.info("Fast verdict: no variant reached 30 train trades -> FAIL (not enough signals)")
+    rep.update({"synthetic": bool(args.synthetic), "days": args.fast_days, "run_at": pd.Timestamp.now("UTC").isoformat()})
+    _json_dump(rep, os.path.join(C.REPORTS_DIR, "fast_experiment.json"))
+    best = (v or {}).get("chosen_on_train")
+    if best and len(all_t[best]):
+        all_t[best].to_csv(os.path.join(C.REPORTS_DIR, "fast_trades.csv"), index=False)
+    return rep
+
+
 def read_live_results():
     try:
         return pd.read_csv(C.TRACK_FILE, low_memory=False)
@@ -389,7 +435,7 @@ def step_dashboard(args):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["fetch", "backtest", "train", "bayes", "portfolio",
-                                        "optimize", "dashboard", "trend", "all"])
+                                        "optimize", "dashboard", "trend", "fast", "all"])
     ap.add_argument("--days", type=int, default=30)
     ap.add_argument("--top", type=int, default=60, help="عدد العملات (حسب حجم 24h)")
     ap.add_argument("--skip-top", type=int, default=0, help="تخطي أعلى N عملة حجمًا")
@@ -406,6 +452,7 @@ def main(argv=None):
     ap.add_argument("--min-test-trades", type=int, default=30)
     ap.add_argument("--apply", action="store_true", help="اكتب العتبات المحسّنة لو اتقبلت")
     ap.add_argument("--trend-days", type=int, default=730, help="أيام الشموع اليومية لاستراتيجية الاتجاه")
+    ap.add_argument("--fast-days", type=int, default=30, help="أيام شموع الدقيقة لاختبار السرعة")
     ap.add_argument("--capital", type=float, default=1000.0)
     ap.add_argument("--risk", type=float, default=0.01)
     ap.add_argument("--max-position", type=float, default=0.25)
@@ -436,6 +483,8 @@ def main(argv=None):
         step_dashboard(args)
     elif cmd == "trend":
         step_trend(args)
+    elif cmd == "fast":
+        step_fast(args)
     elif cmd == "all":
         kl, btc, fng = load_data(args)
         dataset, _ = step_backtest(args, kl, btc, fng)

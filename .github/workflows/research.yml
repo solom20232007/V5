@@ -19,11 +19,14 @@ on:
         description: "تطبيق العتبات المحسّنة لو نجحت في الـ test؟ (yes/no)"
         default: "no"
       mode:
-        description: "all = كل حاجة (ساعة تقريبًا) | trend = استراتيجية الاتجاه اليومي بس (دقايق)"
+        description: "all = كل حاجة (ساعة) | trend = الاتجاه اليومي (دقايق) | fast = اختبار السرعة على شموع الدقيقة (20-40 دقيقة)"
         default: "all"
       trend_days:
         description: "أيام الشموع اليومية لاستراتيجية الاتجاه"
         default: "730"
+      fast_days:
+        description: "أيام شموع الدقيقة لاختبار السرعة"
+        default: "45"
 
 concurrency:
   group: research-v5
@@ -65,6 +68,7 @@ jobs:
           if [ "${{ github.event.inputs.apply }}" = "yes" ]; then APPLY="--apply"; fi
           python research.py "${{ github.event.inputs.mode || 'all' }}" \
             --trend-days "${{ github.event.inputs.trend_days || '730' }}" \
+            --fast-days "${{ github.event.inputs.fast_days || '45' }}" \
             --days "${{ github.event.inputs.days || '30' }}" \
             --top "${{ github.event.inputs.top || '60' }}" \
             --trials "${{ github.event.inputs.trials || '250' }}" $APPLY
