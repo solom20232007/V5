@@ -1,0 +1,169 @@
+{
+  "test_from": "2026-10-24T22:55:24+00:00",
+  "symbols": 36,
+  "cost_pct_round_trip": 0.5,
+  "results": {
+    "strict / 60m": {
+      "train": {
+        "trades": 111,
+        "win_rate": 0.2883,
+        "avg_net_pct": -0.508,
+        "median_net_pct": -1.045,
+        "profit_factor": 0.593,
+        "total_pct": -56.39,
+        "avg_without_top3": -0.684,
+        "avg_mfe_pct": 1.92,
+        "avg_minutes": 44.8,
+        "by_reason": {
+          "TIMEOUT": 64,
+          "SL": 41,
+          "TP3": 3,
+          "BE": 2,
+          "LOCK_TP1": 1
+        }
+      },
+      "test": {
+        "trades": 55,
+        "win_rate": 0.3455,
+        "avg_net_pct": -0.256,
+        "median_net_pct": -0.907,
+        "profit_factor": 0.779,
+        "total_pct": -14.1,
+        "avg_without_top3": -0.634,
+        "avg_mfe_pct": 2.34,
+        "avg_minutes": 41.8,
+        "by_reason": {
+          "TIMEOUT": 26,
+          "SL": 17,
+          "BE": 4,
+          "LOCK_TP1": 4,
+          "TP3": 4
+        }
+      }
+    },
+    "strict / 20m": {
+      "train": {
+        "trades": 112,
+        "win_rate": 0.2768,
+        "avg_net_pct": -0.592,
+        "median_net_pct": -0.609,
+        "profit_factor": 0.38,
+        "total_pct": -66.26,
+        "avg_without_top3": -0.743,
+        "avg_mfe_pct": 1.28,
+        "avg_minutes": 18.2,
+        "by_reason": {
+          "TIMEOUT": 89,
+          "SL": 19,
+          "BE": 2,
+          "TP3": 1,
+          "LOCK_TP1": 1
+        }
+      },
+      "test": {
+        "trades": 57,
+        "win_rate": 0.2807,
+        "avg_net_pct": -0.479,
+        "median_net_pct": -0.926,
+        "profit_factor": 0.534,
+        "total_pct": -27.28,
+        "avg_without_top3": -0.741,
+        "avg_mfe_pct": 1.29,
+        "avg_minutes": 17.2,
+        "by_reason": {
+          "TIMEOUT": 44,
+          "SL": 12,
+          "BE": 1
+        }
+      }
+    },
+    "medium / 60m": {
+      "train": {
+        "trades": 532,
+        "win_rate": 0.3289,
+        "avg_net_pct": -0.464,
+        "median_net_pct": -0.913,
+        "profit_factor": 0.528,
+        "total_pct": -246.73,
+        "avg_without_top3": -0.501,
+        "avg_mfe_pct": 1.57,
+        "avg_minutes": 44.7,
+        "by_reason": {
+          "TIMEOUT": 282,
+          "SL": 197,
+          "BE": 24,
+          "TP3": 18,
+          "LOCK_TP1": 11
+        }
+      },
+      "test": {
+        "trades": 337,
+        "win_rate": 0.2878,
+        "avg_net_pct": -0.652,
+        "median_net_pct": -0.968,
+        "profit_factor": 0.371,
+        "total_pct": -219.87,
+        "avg_without_top3": -0.719,
+        "avg_mfe_pct": 1.29,
+        "avg_minutes": 44.2,
+        "by_reason": {
+          "TIMEOUT": 184,
+          "SL": 125,
+          "BE": 19,
+          "TP3": 5,
+          "LOCK_TP1": 4
+        }
+      }
+    },
+    "medium / 20m": {
+      "train": {
+        "trades": 541,
+        "win_rate": 0.3087,
+        "avg_net_pct": -0.391,
+        "median_net_pct": -0.534,
+        "profit_factor": 0.472,
+        "total_pct": -211.36,
+        "avg_without_top3": -0.425,
+        "avg_mfe_pct": 1.13,
+        "avg_minutes": 18.1,
+        "by_reason": {
+          "TIMEOUT": 436,
+          "SL": 87,
+          "BE": 8,
+          "TP3": 8,
+          "LOCK_TP1": 2
+        }
+      },
+      "test": {
+        "trades": 345,
+        "win_rate": 0.2174,
+        "avg_net_pct": -0.694,
+        "median_net_pct": -0.907,
+        "profit_factor": 0.25,
+        "total_pct": -239.35,
+        "avg_without_top3": -0.743,
+        "avg_mfe_pct": 0.85,
+        "avg_minutes": 17.8,
+        "by_reason": {
+          "TIMEOUT": 273,
+          "SL": 63,
+          "BE": 7,
+          "TP3": 1,
+          "LOCK_TP1": 1
+        }
+      }
+    }
+  },
+  "verdict": {
+    "chosen_on_train": "medium / 20m",
+    "test_trades": 345,
+    "test_avg_net_pct": -0.694,
+    "test_profit_factor": 0.25,
+    "test_avg_without_top3": -0.743,
+    "passes": false,
+    "rule": "PASS = test >= 30 trades, avg > 0, PF > 1.2, still > 0 without top 3 trades"
+  },
+  "synthetic": false,
+  "days": 45,
+  "run_at": "2026-11-11T23:04:37.840275+00:00"
+}
