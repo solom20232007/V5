@@ -106,6 +106,12 @@ BT_LABEL_MIN_SCORE = _env_int("BT_LABEL_MIN_SCORE", 55)  # يسجّل dataset ل
 # لحد ما استراتيجية تثبت ربح على فترة اختبار: الإشارات للمتابعة والتسجيل بس.
 PAPER_MODE = _env_bool("PAPER_MODE", True)
 
+# ---------- Monitor mode ----------
+# الاستراتيجية (شراء بعد طلوع 15 دقيقة) خسرت على 180 يوم بكل التعديلات.
+# الرسايل بقت تنبيهات رصد: "العملة بتتحرك بحجم غير عادي" — من غير دخول ولا وقف ولا أهداف.
+# المتابعة والتسجيل شغالين في الخلفية للقياس، لكن تنبيهات TP/SL مش بتتبعت.
+MONITOR_MODE = _env_bool("MONITOR_MODE", True)
+
 # ---------- Market burst / correlated signals ----------
 # اندفاعة سوق عامة = عدد العملات اللي عدّت WATCH في نفس الدورة في أعلى BURST_QUANTILE من التاريخ
 BURST_FILTER = _env_bool("BURST_FILTER", True)

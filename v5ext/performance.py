@@ -148,7 +148,8 @@ def build_report(df, kind, now_utc=None, tag="🤖 [V5.1]"):
     still_open = int((df.get("trade_status", pd.Series(dtype=object)).astype(str) == "OPEN").sum()) \
         if df is not None and len(df) else 0
     icon = {"daily": "📅", "weekly": "🗓", "monthly": "📆"}[kind]
-    lines = [f"{tag} {icon} {label}" + (" — 🧪 إشارات تجريبية" if C.PAPER_MODE else ""), ""]
+    suffix = " — 👀 قياس تنبيهات الرصد" if getattr(C, "MONITOR_MODE", False) else (" — 🧪 إشارات تجريبية" if C.PAPER_MODE else "")
+    lines = [f"{tag} {icon} {label}" + suffix, ""]
     lines.append(f"إشارات جديدة: {opened} | صفقات اتقفلت: {s['trades']} | لسه مفتوحة الآن: {still_open}")
     if s["trades"]:
         lines.append(f"✅ ناجحة: {s['wins']} | ❌ خاسرة: {s['losses']} | نسبة النجاح: {s['win_rate'] * 100:.0f}%")
@@ -166,7 +167,10 @@ def build_report(df, kind, now_utc=None, tag="🤖 [V5.1]"):
                 lines.append(f"• {r.symbol}: {r.pnl_pct:+.2f}% ({EXIT_AR.get(str(r.exit_reason), r.exit_reason)})")
     else:
         lines.append("مفيش صفقات اتقفلت في الفترة دي.")
-    lines += ["", "النسب بعد الرسوم والانزلاق، على أساس خطة الأهداف المكتوبة في كل إشارة."]
+    if getattr(C, "MONITOR_MODE", False):
+        lines += ["", "ده قياس داخلي: لو حد اشترى وقت كل تنبيه بقواعد ثابتة (وقف + 3 أهداف)، بعد الرسوم."]
+    else:
+        lines += ["", "النسب بعد الرسوم والانزلاق، على أساس خطة الأهداف المكتوبة في كل إشارة."]
     return "\n".join(lines), s
 
 

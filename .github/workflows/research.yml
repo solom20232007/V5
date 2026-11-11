@@ -18,6 +18,12 @@ on:
       apply:
         description: "تطبيق العتبات المحسّنة لو نجحت في الـ test؟ (yes/no)"
         default: "no"
+      mode:
+        description: "all = كل حاجة (ساعة تقريبًا) | trend = استراتيجية الاتجاه اليومي بس (دقايق)"
+        default: "all"
+      trend_days:
+        description: "أيام الشموع اليومية لاستراتيجية الاتجاه"
+        default: "730"
 
 concurrency:
   group: research-v5
@@ -57,7 +63,8 @@ jobs:
         run: |
           APPLY=""
           if [ "${{ github.event.inputs.apply }}" = "yes" ]; then APPLY="--apply"; fi
-          python research.py all \
+          python research.py "${{ github.event.inputs.mode || 'all' }}" \
+            --trend-days "${{ github.event.inputs.trend_days || '730' }}" \
             --days "${{ github.event.inputs.days || '30' }}" \
             --top "${{ github.event.inputs.top || '60' }}" \
             --trials "${{ github.event.inputs.trials || '250' }}" $APPLY

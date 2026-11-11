@@ -15,7 +15,7 @@ _session.headers.update({"User-Agent": "Binance-Early-Pump-Scanner-V5.1/research
 
 KLINE_COLUMNS = ["open_time", "open", "high", "low", "close", "volume", "close_time",
                  "quote_volume", "trades", "taker_buy_base", "taker_buy_quote", "ignore"]
-INTERVAL_MS = {"1m": 60_000, "5m": 300_000, "15m": 900_000, "1h": 3_600_000}
+INTERVAL_MS = {"1m": 60_000, "5m": 300_000, "15m": 900_000, "1h": 3_600_000, "1d": 86_400_000}
 
 
 def spot_get(path, params=None, retries=3, timeout=10):

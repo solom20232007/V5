@@ -263,6 +263,69 @@ def step_pullback_experiment(args, dataset, kl):
     return res
 
 
+def _synthetic_daily(symbol, days, seed, drift=0.0005):
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    r = rng.normal(drift, 0.04, days)
+    # موجات اتجاه
+    for _ in range(days // 120):
+        s = int(rng.integers(0, days - 40)); r[s:s + 30] += rng.choice([-1, 1]) * 0.012
+    c = 10 * np.exp(np.cumsum(r)); o = np.concatenate([[10], c[:-1]])
+    h = np.maximum(o, c) * (1 + abs(rng.normal(0, 0.015, days)))
+    l = np.minimum(o, c) * (1 - abs(rng.normal(0, 0.015, days)))
+    t0 = 1_700_000_000_000 // 86_400_000 * 86_400_000
+    ot = t0 + np.arange(days) * 86_400_000
+    return pd.DataFrame({"open_time": ot, "open": o, "high": h, "low": l, "close": c,
+                         "volume": 1.0, "close_time": ot + 86_399_999, "quote_volume": 1e7})
+
+
+def step_trend(args):
+    """استراتيجية الاتجاه اليومي — شموع يومية لآخر trend_days يوم."""
+    from v5ext import trend_strategy as TS
+    from v5ext import portfolio as P
+    if args.synthetic:
+        kl = {f"SYN{i}USDT": _synthetic_daily(f"SYN{i}", args.trend_days, i) for i in range(args.top)}
+        btc = _synthetic_daily("BTC", args.trend_days, 999, drift=0.001)
+    else:
+        from v5ext.binance_data import load_klines
+        syms = resolve_universe(args)
+        now_ms = int(time.time() * 1000)
+        kl = {}
+        for s in syms:
+            try:
+                df = load_klines(s, "1d", args.trend_days, now_ms)
+                if len(df) >= 120:
+                    kl[s] = df
+            except Exception as e:  # noqa: BLE001
+                log.warning(f"{s}: daily klines failed: {e}")
+        btc = load_klines("BTCUSDT", "1d", args.trend_days, now_ms)
+    log.info(f"Trend: {len(kl)} symbols, {args.trend_days} days")
+    # الاتجاه اليومي بيمسك الصفقات الكسبانة أسابيع → 5 خانات بتتملي وتضيّع إشارات. 10 خانات × 15% حد أقصى.
+    cfg = P.PortfolioConfig(initial_capital=args.capital, risk_per_trade=args.risk,
+                            max_position_pct=min(args.max_position, 0.15),
+                            max_positions=max(args.max_positions, 10))
+    rep = TS.experiment(kl, btc, portfolio_cfg=cfg)
+    for name, v in (rep.get("results") or {}).items():
+        tr, te, pt = v["train"], v["test"], v["test_portfolio"]
+        log.info(f"Trend {name:20}: train {tr['trades']:3} avg {tr['avg_net_pct']:+.2f}% | test {te['trades']:3} "
+                 f"avg {te['avg_net_pct']:+.2f}% PF {te['profit_factor']} | portfolio {pt.get('return_pct')}% "
+                 f"DD {pt.get('max_drawdown_pct')}%")
+    v = rep.get("verdict")
+    if v:
+        log.info(f"Trend verdict: {v['chosen_on_train']} -> test avg {v['test_avg_net_pct']:+.2f}% "
+                 f"({v['test_trades']} trades), portfolio {v['test_portfolio_return_pct']}% vs BTC hold "
+                 f"{v['btc_buy_hold_test_pct']}% -> {'PASS' if v['passes'] else 'FAIL'}")
+    rep["synthetic"] = bool(args.synthetic)
+    rep["days"] = args.trend_days
+    rep["run_at"] = pd.Timestamp.now("UTC").isoformat()
+    _json_dump(rep, os.path.join(C.REPORTS_DIR, "trend_experiment.json"))
+    best = (v or {}).get("chosen_on_train")
+    if best:
+        kw = dict(TS.VARIANTS[best])
+        TS.run(kl, btc, **kw).to_csv(os.path.join(C.REPORTS_DIR, "trend_trades.csv"), index=False)
+    return rep
+
+
 def read_live_results():
     try:
         return pd.read_csv(C.TRACK_FILE, low_memory=False)
@@ -326,7 +389,7 @@ def step_dashboard(args):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["fetch", "backtest", "train", "bayes", "portfolio",
-                                        "optimize", "dashboard", "all"])
+                                        "optimize", "dashboard", "trend", "all"])
     ap.add_argument("--days", type=int, default=30)
     ap.add_argument("--top", type=int, default=60, help="عدد العملات (حسب حجم 24h)")
     ap.add_argument("--skip-top", type=int, default=0, help="تخطي أعلى N عملة حجمًا")
@@ -342,6 +405,7 @@ def main(argv=None):
     ap.add_argument("--min-train-trades", type=int, default=40)
     ap.add_argument("--min-test-trades", type=int, default=30)
     ap.add_argument("--apply", action="store_true", help="اكتب العتبات المحسّنة لو اتقبلت")
+    ap.add_argument("--trend-days", type=int, default=730, help="أيام الشموع اليومية لاستراتيجية الاتجاه")
     ap.add_argument("--capital", type=float, default=1000.0)
     ap.add_argument("--risk", type=float, default=0.01)
     ap.add_argument("--max-position", type=float, default=0.25)
@@ -370,6 +434,8 @@ def main(argv=None):
             step_optimize(args)
     elif cmd == "dashboard":
         step_dashboard(args)
+    elif cmd == "trend":
+        step_trend(args)
     elif cmd == "all":
         kl, btc, fng = load_data(args)
         dataset, _ = step_backtest(args, kl, btc, fng)
@@ -378,6 +444,10 @@ def main(argv=None):
         step_tp_experiment(args, dataset, kl)
         step_burst_experiment(args, dataset, kl)
         step_pullback_experiment(args, dataset, kl)
+        try:
+            step_trend(args)
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"trend experiment failed: {e}")
         try:
             meta, oos = step_train(args, dataset)
             step_ml_backtest(args, dataset, kl, oos)

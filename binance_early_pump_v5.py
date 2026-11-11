@@ -2174,6 +2174,15 @@ def send_trade_alerts(track):
     alerts = track.get("alerts") or []
     if not alerts:
         return False
+    try:
+        from v5ext import config as _C
+        if _C.MONITOR_MODE:
+            # وضع الرصد: مفيش أهداف/وقف اتقالوا للمستخدم → التسجيل بس في الخلفية
+            track.setdefault("alerts_sent", []).extend(a["event"] for a in alerts)
+            track["alerts"] = []
+            return True
+    except Exception:  # noqa: BLE001
+        pass
     # لو التنبيه المبكر والإغلاق وصلوا مع بعض (تأخير في التشغيل) → نبعت الإغلاق بس
     closing = {"SL", "BE", "LOCK_TP1", "TP3", "TIMEOUT"}
     if any(a["event"] in closing for a in alerts):

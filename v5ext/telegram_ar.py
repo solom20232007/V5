@@ -146,7 +146,32 @@ def _model_line(x):
     return f"🔬 تقدير النموذج لهذه الإشارة (تقديري، مش ضمان): {p * 100:.0f}% يوصل TP1 قبل الوقف"
 
 
+def format_monitor_ar(x, confirmations, cross_label=None, tag="🤖 [V5.1]"):
+    """تنبيه رصد: حقائق عن الحركة بس — مفيش دخول/وقف/أهداف ولا توقعات."""
+    lines = [f"{tag} 👀 رصد: {x['symbol']} بتتحرك بحجم غير عادي", ""]
+    lines.append(f"📉 الحركة: 5د {_f(x.get('5m'), 0):+.2f}% | 15د {_f(x.get('15m'), 0):+.2f}% | "
+                 f"ساعة {_f(x.get('1h'), 0):+.2f}% | 24س {_f(x.get('24h'), 0):+.2f}%")
+    lines.append(f"💲 السعر الآن: {_p(x.get('price') or 0)}")
+    lines.append(f"💧 السيولة 24 ساعة: ${_f(x.get('quote_volume'), 0):,.0f} ({x.get('liquidity')})")
+    lines += ["", "━━━ 🔎 اللي لفت النظر ━━━"]
+    lines += [f"• {t}" for t in reasons(x, confirmations, cross_label)]
+    lines.append("")
+    lines += orderbook_lines(x)
+    if (x.get("whale_count") or 0) > 0:
+        lines.append(f"🐋 صفقات كبيرة آخر {_f(x.get('whale_window_min'), 0):.0f} دقيقة: "
+                     f"شراء ${_f(x.get('whale_buy_usd'), 0):,.0f} / بيع ${_f(x.get('whale_sell_usd'), 0):,.0f}")
+    if x.get("fng") is not None:
+        lines.append(f"😨 الخوف والطمع (Fear & Greed): {x.get('fng')}")
+    warn = warnings(x, cross_label)
+    if warn:
+        lines += ["", "━━━ ⚠️ انتبه ━━━"] + [f"• {t}" for t in warn]
+    lines += ["", "ℹ️ تنبيه رصد فقط — مش إشارة شراء. الاختبار على 6 شهور: الشراء وقت الحركة دي كان بيخسر بعد الرسوم في المتوسط."]
+    return "\n".join(lines)
+
+
 def format_final_ar(x, confirmations, cross_label=None, cross_detail=None, tag="🤖 [V5.1]"):
+    if C.MONITOR_MODE:
+        return format_monitor_ar(x, confirmations, cross_label, tag)
     hz = x.get("horizon") or classify_horizon(x)
     hz_name, hz_time, hz_timeout = HORIZONS[hz][:3]
     x["horizon"] = hz
