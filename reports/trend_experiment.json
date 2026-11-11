@@ -1,0 +1,175 @@
+{
+  "test_from": "2026-02-11T19:12:00+00:00",
+  "symbols": 36,
+  "results": {
+    "20/10 + BTC filter": {
+      "train": {
+        "trades": 141,
+        "win_rate": 0.227,
+        "avg_net_pct": 3.162,
+        "median_net_pct": -8.705,
+        "profit_factor": 1.43,
+        "total_pct": 445.88,
+        "avg_days": 17.5,
+        "best": 928.98,
+        "worst": -22.69,
+        "by_reason": {
+          "TRAIL": 73,
+          "STOP": 68
+        }
+      },
+      "test": {
+        "trades": 130,
+        "win_rate": 0.2615,
+        "avg_net_pct": 1.335,
+        "median_net_pct": -8.599,
+        "profit_factor": 1.178,
+        "total_pct": 173.51,
+        "avg_days": 16.1,
+        "best": 184.14,
+        "worst": -23.5,
+        "by_reason": {
+          "STOP": 74,
+          "TRAIL": 56
+        }
+      },
+      "test_portfolio": {
+        "return_pct": 15.64,
+        "max_drawdown_pct": 16.46,
+        "taken": 66,
+        "skipped_max_positions": 64
+      }
+    },
+    "20/10 no filter": {
+      "train": {
+        "trades": 162,
+        "win_rate": 0.216,
+        "avg_net_pct": 1.506,
+        "median_net_pct": -9.357,
+        "profit_factor": 1.187,
+        "total_pct": 244.0,
+        "avg_days": 17.1,
+        "best": 961.87,
+        "worst": -22.69,
+        "by_reason": {
+          "STOP": 81,
+          "TRAIL": 81
+        }
+      },
+      "test": {
+        "trades": 141,
+        "win_rate": 0.2695,
+        "avg_net_pct": 1.174,
+        "median_net_pct": -8.425,
+        "profit_factor": 1.157,
+        "total_pct": 165.54,
+        "avg_days": 16.3,
+        "best": 184.14,
+        "worst": -23.5,
+        "by_reason": {
+          "STOP": 79,
+          "TRAIL": 62
+        }
+      },
+      "test_portfolio": {
+        "return_pct": 17.68,
+        "max_drawdown_pct": 13.48,
+        "taken": 75,
+        "skipped_max_positions": 66
+      }
+    },
+    "55/20 + BTC filter": {
+      "train": {
+        "trades": 60,
+        "win_rate": 0.2,
+        "avg_net_pct": 0.164,
+        "median_net_pct": -10.426,
+        "profit_factor": 1.017,
+        "total_pct": 9.83,
+        "avg_days": 22.6,
+        "best": 377.13,
+        "worst": -27.42,
+        "by_reason": {
+          "STOP": 41,
+          "TRAIL": 18,
+          "MAX_HOLD": 1
+        }
+      },
+      "test": {
+        "trades": 81,
+        "win_rate": 0.1852,
+        "avg_net_pct": -2.811,
+        "median_net_pct": -10.382,
+        "profit_factor": 0.699,
+        "total_pct": -227.67,
+        "avg_days": 18.2,
+        "best": 145.73,
+        "worst": -23.92,
+        "by_reason": {
+          "STOP": 60,
+          "TRAIL": 21
+        }
+      },
+      "test_portfolio": {
+        "return_pct": -5.95,
+        "max_drawdown_pct": 18.89,
+        "taken": 50,
+        "skipped_max_positions": 31
+      }
+    },
+    "55/20 no filter": {
+      "train": {
+        "trades": 65,
+        "win_rate": 0.1846,
+        "avg_net_pct": 2.415,
+        "median_net_pct": -10.838,
+        "profit_factor": 1.234,
+        "total_pct": 156.99,
+        "avg_days": 22.9,
+        "best": 624.09,
+        "worst": -33.87,
+        "by_reason": {
+          "STOP": 45,
+          "TRAIL": 19,
+          "MAX_HOLD": 1
+        }
+      },
+      "test": {
+        "trades": 84,
+        "win_rate": 0.1786,
+        "avg_net_pct": -2.859,
+        "median_net_pct": -10.498,
+        "profit_factor": 0.695,
+        "total_pct": -240.16,
+        "avg_days": 17.8,
+        "best": 145.73,
+        "worst": -23.92,
+        "by_reason": {
+          "STOP": 63,
+          "TRAIL": 21
+        }
+      },
+      "test_portfolio": {
+        "return_pct": -8.44,
+        "max_drawdown_pct": 17.96,
+        "taken": 48,
+        "skipped_max_positions": 36
+      }
+    }
+  },
+  "verdict": {
+    "chosen_on_train": "20/10 + BTC filter",
+    "test_trades": 130,
+    "test_avg_net_pct": 1.335,
+    "test_profit_factor": 1.178,
+    "test_portfolio_return_pct": 15.64,
+    "test_portfolio_max_dd_pct": 16.46,
+    "btc_buy_hold_test_pct": 10.01,
+    "passes": false,
+    "rule": "PASS = test >= 20 trades, avg > 0, PF > 1.2, portfolio return > 0"
+  },
+  "btc_buy_hold_test_pct": 10.01,
+  "synthetic": false,
+  "days": 730,
+  "run_at": "2026-11-11T21:56:23.071123+00:00"
+}
