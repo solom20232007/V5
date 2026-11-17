@@ -1,9 +1,9 @@
 {
  "current": {
-  "value": 10,
+  "value": 12,
   "label": "EXTREME_FEAR",
-  "ts": 1794787200,
-  "fetched": 1794871529.9134648
+  "ts": 1794873600,
+  "fetched": 1794875131.910288
  },
  "history": {
   "2026-11-15": 10,
