@@ -9,16 +9,16 @@
   "signals": 5,
   "taken": 5,
   "skipped_max_positions": 0,
-  "final_equity": 984.87,
-  "return_pct": -1.51,
+  "final_equity": 979.17,
+  "return_pct": -2.08,
   "max_drawdown_pct": 3.07,
   "win_rate": 0.4,
-  "profit_factor": 0.511,
-  "avg_pnl": -3.026,
+  "profit_factor": 0.327,
+  "avg_pnl": -4.166,
   "best_trade": 8.0,
   "worst_trade": -10.68,
   "monthly_pnl": {
     "2026-10": 8.0,
-    "2026-11": -23.13
+    "2026-11": -28.83
   }
 }
