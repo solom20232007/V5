@@ -1,9 +1,9 @@
 {
-  "run_at": "2026-11-15T09:32:26.084971+00:00",
+  "run_at": "2026-11-22T09:51:51.969656+00:00",
   "trials": 311,
   "train_frac": 0.7,
-  "train_records": 20114,
-  "test_records": 8289,
+  "train_records": 14505,
+  "test_records": 5861,
   "best_params": {
     "FINAL_SCORE": 80,
     "PERSISTENT_FINAL_SCORE": 70,
@@ -14,93 +14,83 @@
   },
   "best_fng_mode": "adjust",
   "best_train": {
-    "trades": 18,
-    "win_rate": 0.4444,
-    "expectancy_r": -0.2845,
-    "avg_net_pct": -1.0343,
-    "profit_factor": 0.364,
-    "total_r": -5.121,
-    "max_dd_r": 5.901,
-    "max_losing_streak": 4,
-    "avg_bars_held": 66.9,
+    "trades": 9,
+    "win_rate": 0.2222,
+    "expectancy_r": -0.6705,
+    "avg_net_pct": -2.8767,
+    "profit_factor": 0.07,
+    "total_r": -6.034,
+    "max_dd_r": 6.034,
+    "max_losing_streak": 5,
+    "avg_bars_held": 75.0,
     "by_lane": {
-      "EXPLOSIVE": {
-        "trades": 2,
-        "win_rate": 0.5,
-        "expectancy_r": 0.111
-      },
       "PERSISTENT": {
-        "trades": 9,
-        "win_rate": 0.444,
-        "expectancy_r": -0.279
+        "trades": 3,
+        "win_rate": 0.333,
+        "expectancy_r": -0.297
       },
       "STRICT": {
-        "trades": 7,
-        "win_rate": 0.429,
-        "expectancy_r": -0.405
+        "trades": 6,
+        "win_rate": 0.167,
+        "expectancy_r": -0.857
       }
     },
     "by_horizon": {
       "INTRADAY": {
-        "trades": 14,
-        "win_rate": 0.5,
-        "avg_net_pct": -0.791
-      },
-      "SCALPING": {
-        "trades": 3,
+        "trades": 6,
         "win_rate": 0.333,
-        "avg_net_pct": -0.748
+        "avg_net_pct": -1.665
       },
       "SWING": {
-        "trades": 1,
+        "trades": 3,
         "win_rate": 0.0,
         "avg_net_pct": -5.3
       }
     },
     "by_outcome": {
-      "TIMEOUT": 9,
       "SL": 5,
-      "BE": 4
+      "TIMEOUT": 3,
+      "BE": 1
     }
   },
   "best_train_objective": -1000000000.0,
   "best_test": {
-    "trades": 6,
-    "win_rate": 0.1667,
-    "expectancy_r": -0.5503,
-    "avg_net_pct": -2.4562,
-    "profit_factor": 0.244,
-    "total_r": -3.302,
-    "max_dd_r": 4.369,
-    "max_losing_streak": 5,
-    "avg_bars_held": 56.2,
+    "trades": 4,
+    "win_rate": 0.25,
+    "expectancy_r": -0.4108,
+    "avg_net_pct": -1.2829,
+    "profit_factor": 0.131,
+    "total_r": -1.643,
+    "max_dd_r": 1.643,
+    "max_losing_streak": 2,
+    "avg_bars_held": 57.8,
     "by_lane": {
-      "PERSISTENT": {
-        "trades": 4,
-        "win_rate": 0.25,
-        "expectancy_r": -0.289
+      "EXPLOSIVE": {
+        "trades": 1,
+        "win_rate": 0.0,
+        "expectancy_r": -0.62
       },
       "STRICT": {
-        "trades": 2,
-        "win_rate": 0.0,
-        "expectancy_r": -1.073
+        "trades": 3,
+        "win_rate": 0.333,
+        "expectancy_r": -0.341
       }
     },
     "by_horizon": {
       "INTRADAY": {
-        "trades": 4,
-        "win_rate": 0.25,
-        "avg_net_pct": -1.034
+        "trades": 3,
+        "win_rate": 0.333,
+        "avg_net_pct": -1.194
       },
-      "SWING": {
-        "trades": 2,
+      "SCALPING": {
+        "trades": 1,
         "win_rate": 0.0,
-        "avg_net_pct": -5.3
+        "avg_net_pct": -1.55
       }
     },
     "by_outcome": {
       "TIMEOUT": 3,
-      "SL": 3
+      "BE": 1
     }
   },
   "best_test_objective": -1000000000.0,
@@ -113,92 +103,82 @@
     "RISK_RR_TP1": 1.5
   },
   "current_train": {
-    "trades": 18,
-    "win_rate": 0.4444,
-    "expectancy_r": -0.2845,
-    "avg_net_pct": -1.0343,
-    "profit_factor": 0.364,
-    "total_r": -5.121,
-    "max_dd_r": 5.901,
-    "max_losing_streak": 4,
-    "avg_bars_held": 66.9,
+    "trades": 9,
+    "win_rate": 0.2222,
+    "expectancy_r": -0.6705,
+    "avg_net_pct": -2.8767,
+    "profit_factor": 0.07,
+    "total_r": -6.034,
+    "max_dd_r": 6.034,
+    "max_losing_streak": 5,
+    "avg_bars_held": 75.0,
     "by_lane": {
-      "EXPLOSIVE": {
-        "trades": 2,
-        "win_rate": 0.5,
-        "expectancy_r": 0.111
-      },
       "PERSISTENT": {
-        "trades": 9,
-        "win_rate": 0.444,
-        "expectancy_r": -0.279
+        "trades": 3,
+        "win_rate": 0.333,
+        "expectancy_r": -0.297
       },
       "STRICT": {
-        "trades": 7,
-        "win_rate": 0.429,
-        "expectancy_r": -0.405
+        "trades": 6,
+        "win_rate": 0.167,
+        "expectancy_r": -0.857
       }
     },
     "by_horizon": {
       "INTRADAY": {
-        "trades": 14,
-        "win_rate": 0.5,
-        "avg_net_pct": -0.791
-      },
-      "SCALPING": {
-        "trades": 3,
+        "trades": 6,
         "win_rate": 0.333,
-        "avg_net_pct": -0.748
+        "avg_net_pct": -1.665
       },
       "SWING": {
-        "trades": 1,
+        "trades": 3,
         "win_rate": 0.0,
         "avg_net_pct": -5.3
       }
     },
     "by_outcome": {
-      "TIMEOUT": 9,
       "SL": 5,
-      "BE": 4
+      "TIMEOUT": 3,
+      "BE": 1
     }
   },
   "current_test": {
-    "trades": 6,
-    "win_rate": 0.1667,
-    "expectancy_r": -0.5503,
-    "avg_net_pct": -2.4562,
-    "profit_factor": 0.244,
-    "total_r": -3.302,
-    "max_dd_r": 4.369,
-    "max_losing_streak": 5,
-    "avg_bars_held": 56.2,
+    "trades": 4,
+    "win_rate": 0.25,
+    "expectancy_r": -0.4108,
+    "avg_net_pct": -1.2829,
+    "profit_factor": 0.131,
+    "total_r": -1.643,
+    "max_dd_r": 1.643,
+    "max_losing_streak": 2,
+    "avg_bars_held": 57.8,
     "by_lane": {
-      "PERSISTENT": {
-        "trades": 4,
-        "win_rate": 0.25,
-        "expectancy_r": -0.289
+      "EXPLOSIVE": {
+        "trades": 1,
+        "win_rate": 0.0,
+        "expectancy_r": -0.62
       },
       "STRICT": {
-        "trades": 2,
-        "win_rate": 0.0,
-        "expectancy_r": -1.073
+        "trades": 3,
+        "win_rate": 0.333,
+        "expectancy_r": -0.341
       }
     },
     "by_horizon": {
       "INTRADAY": {
-        "trades": 4,
-        "win_rate": 0.25,
-        "avg_net_pct": -1.034
+        "trades": 3,
+        "win_rate": 0.333,
+        "avg_net_pct": -1.194
       },
-      "SWING": {
-        "trades": 2,
+      "SCALPING": {
+        "trades": 1,
         "win_rate": 0.0,
-        "avg_net_pct": -5.3
+        "avg_net_pct": -1.55
       }
     },
     "by_outcome": {
       "TIMEOUT": 3,
-      "SL": 3
+      "BE": 1
     }
   },
   "current_test_objective": -1000000000.0,
@@ -217,8 +197,8 @@
         "RISK_RR_TP1": 1.5
       },
       "fng_mode": "adjust",
-      "trades": 18,
-      "expectancy_r": -0.2845
+      "trades": 9,
+      "expectancy_r": -0.6705
     },
     {
       "objective": -1000000000.0,
@@ -231,8 +211,8 @@
         "RISK_RR_TP1": 1.154
       },
       "fng_mode": "block",
-      "trades": 16,
-      "expectancy_r": -0.3682
+      "trades": 8,
+      "expectancy_r": -0.6248
     },
     {
       "objective": -1000000000.0,
@@ -245,8 +225,8 @@
         "RISK_RR_TP1": 1.758
       },
       "fng_mode": "adjust",
-      "trades": 10,
-      "expectancy_r": -0.3516
+      "trades": 6,
+      "expectancy_r": -0.8891
     },
     {
       "objective": -1000000000.0,
@@ -259,8 +239,8 @@
         "RISK_RR_TP1": 2.304
       },
       "fng_mode": "adjust",
-      "trades": 11,
-      "expectancy_r": -0.5625
+      "trades": 6,
+      "expectancy_r": -0.8891
     },
     {
       "objective": -1000000000.0,
@@ -273,8 +253,8 @@
         "RISK_RR_TP1": 1.153
       },
       "fng_mode": "off",
-      "trades": 13,
-      "expectancy_r": -0.1254
+      "trades": 7,
+      "expectancy_r": -0.6792
     },
     {
       "objective": -1000000000.0,
@@ -287,8 +267,8 @@
         "RISK_RR_TP1": 2.095
       },
       "fng_mode": "block",
-      "trades": 11,
-      "expectancy_r": -0.4744
+      "trades": 5,
+      "expectancy_r": -0.8498
     },
     {
       "objective": -1000000000.0,
@@ -301,8 +281,8 @@
         "RISK_RR_TP1": 2.328
       },
       "fng_mode": "off",
-      "trades": 16,
-      "expectancy_r": -0.3992
+      "trades": 7,
+      "expectancy_r": -0.8881
     },
     {
       "objective": -1000000000.0,
@@ -315,8 +295,8 @@
         "RISK_RR_TP1": 1.12
       },
       "fng_mode": "adjust",
-      "trades": 19,
-      "expectancy_r": -0.3289
+      "trades": 10,
+      "expectancy_r": -0.7002
     },
     {
       "objective": -1000000000.0,
@@ -329,8 +309,8 @@
         "RISK_RR_TP1": 1.555
       },
       "fng_mode": "adjust",
-      "trades": 12,
-      "expectancy_r": -0.2028
+      "trades": 6,
+      "expectancy_r": -0.6361
     },
     {
       "objective": -1000000000.0,
@@ -343,8 +323,8 @@
         "RISK_RR_TP1": 1.245
       },
       "fng_mode": "off",
-      "trades": 15,
-      "expectancy_r": -0.3354
+      "trades": 8,
+      "expectancy_r": -0.6531
     }
   ]
 }
